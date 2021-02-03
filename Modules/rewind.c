@@ -562,11 +562,9 @@ void Rewind_TrackObject(PyObject *obj) {
         Py_DECREF(id);
 
         fprintf(rewindLog, "NEW_OBJECT(%lu, ", (unsigned long)obj);
-        PyObject *type = PyObject_Type(obj);
-        //PyObject *typeName = PyObject_GetAttr(type, PyUnicode_FromString("__qualname__"));
-        //PyObject_Print(typeName, rewindLog, 0);
-        //fprintf(rewindLog, ", ");
-        Rewind_serializeObject(rewindLog, type);
+        PyTypeObject *type = (PyTypeObject *)PyObject_Type(obj);
+        fprintf(rewindLog, "\"%s\", ", type->tp_name);
+        Rewind_serializeObject(rewindLog, (PyObject *)type);
         fprintf(rewindLog, ")\n");
     }
 }
@@ -588,6 +586,17 @@ void Rewind_serializeObject(FILE *file, PyObject *obj) {
     } else {
         fprintf(file, "*%lu", (unsigned long)obj);
     }
+}
+
+void Rewind_Error(PyObject *exceptionType, PyObject *exception) {
+    if (!rewindActive) return;
+
+    
+    fprintf(rewindLog, "ERROR(");
+    PyTypeObject *type = (PyTypeObject *)exceptionType;
+    fprintf(rewindLog, "\"%s\", ", type->tp_name);
+    PyObject_Print(exception, rewindLog, 0);
+    fprintf(rewindLog, ")\n");
 }
 
 void Rewind_Dealloc(PyObject *obj) {

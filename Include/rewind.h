@@ -76,6 +76,8 @@ void Rewind_SetAttr(PyObject *obj, PyObject *attr, PyObject *value);
 
 void Rewind_StringInPlaceAdd(PyObject *left, PyObject *right, PyObject *result);
 
+void Rewind_Error(PyObject *exceptionType, PyObject *exception);
+
 void Rewind_Dealloc(PyObject *obj);
 
 void Rewind_FlushDeallocatedIds(void);

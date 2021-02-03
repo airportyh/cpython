@@ -1,0 +1,7 @@
+#! /bin/sh
+REWIND_FILE=$1
+SQLITE_FILE=${1%.rewind}.sqlite
+echo "python recreate.py $REWIND_FILE"
+python3 recreate.py $REWIND_FILE
+echo "node ../play-lang/src/term-debugger/term-debugger.mjs $SQLITE_FILE"
+node ../play-lang/src/term-debugger/term-debugger.mjs $SQLITE_FILE

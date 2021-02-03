@@ -9,3 +9,6 @@ def fib(n):
 def main():
     result = fib(5)
     print(result)
+
+if __name__ == "__main__":
+    main()

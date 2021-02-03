@@ -4156,6 +4156,7 @@ main_loop:
 
 error:
         /* Double-check exception status. */
+        Rewind_Error(tstate->curexc_type, tstate->curexc_value);
 #ifdef NDEBUG
         if (!_PyErr_Occurred(tstate)) {
             _PyErr_SetString(tstate, PyExc_SystemError,

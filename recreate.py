@@ -1,11 +1,10 @@
 # Todo
 
-# when a call expression is spread over multiple lines, step into fails
-# should step forward when it pops a stack, come back to the beginning of the state of the line in parent scope,
-#  or after?
 # ability to filter tracing only to the code you choose
+# get zoom debugger to work for Python
+# object tagging
+# queries
 # get classes to work as objects
-# log exceptions
 # get pygame working
 # get ascii draw working
 # get flask working
@@ -14,9 +13,11 @@
 # collect "real world" python apps
 # write terminal debugger in python
 # have a flag to turn on debug mode
-# try it on a "real" app
+# try it on a "real" apps
 # optimization: use low level iteration methods whenever possible
 
+# log exceptions (done)
+# convinience script for debugging python programs
 # should we make stack variables heap objects the same way Python does it? (done)
 #    So that del var statements can work naturally (done)
 # global vars in a module (done)
@@ -102,11 +103,8 @@ def define_schema(conn):
             fun_call_id integer,
             heap integer,
             line_no integer,
-            error_id integer,
             constraint Snapshot_fk_fun_call_id foreign key (fun_call_id)
                 references FunCall(id)
-            constraint Snapshot_fk_error_id foreign key (error_id)
-                references Error(id)
         );
     """)
 
@@ -158,7 +156,12 @@ def define_schema(conn):
     c.execute("""
         create table Error (
             id integer primary key,
-            message text
+            type text,
+            message text,
+            snapshot_id integer,
+
+            constraint Error_fk_snapshot_id foreign key (snapshot_id)
+                references Snapshot(id)
         );
     """)
 
@@ -291,6 +294,12 @@ def recreate_past(conn, filename):
         fun_call_id = next_fun_call_id
         next_fun_call_id += 1
         return fun_call_id
+    
+    def new_error_id():
+        nonlocal next_error_id
+        ret = next_error_id
+        next_error_id += 1
+        return ret
     
     def immut_id(obj):
         nonlocal object_id_to_immutable_id_dict
@@ -467,12 +476,11 @@ def recreate_past(conn, filename):
         curr_line_no = line_no
         if not activate_snapshots:
             return
-        cursor.execute("INSERT INTO Snapshot VALUES (?, ?, ?, ?, ?)", (
+        cursor.execute("INSERT INTO Snapshot VALUES (?, ?, ?, ?)", (
             new_snapshot_id(), 
             stack and stack.id, 
             heap_version,
-            line_no,
-            None
+            line_no
         ))
     
     fun_lookup["VISIT"] = process_visit
@@ -513,12 +521,11 @@ def recreate_past(conn, filename):
         new_local_vars["<ret val>"] = ret_val
         update_heap_object(heap_id, new_local_vars)
 
-        cursor.execute("INSERT INTO Snapshot VALUES (?, ?, ?, ?, ?)", (
+        cursor.execute("INSERT INTO Snapshot VALUES (?, ?, ?, ?)", (
             new_snapshot_id(), 
             stack and stack.id, 
             heap_version,
-            curr_line_no, 
-            None
+            curr_line_no
         ))
 
     fun_lookup["RETURN_VALUE"] = process_return_value
@@ -726,7 +733,7 @@ def recreate_past(conn, filename):
 
     fun_lookup["SET_DISCARD"] = process_set_discard
 
-    def process_new_object(heap_id, type_object):
+    def process_new_object(heap_id, type_name, type_object):
         # represent an object simply with a dict
         update_heap_object(heap_id, {})
     
@@ -742,6 +749,24 @@ def recreate_past(conn, filename):
         update_heap_object(heap_id, new_obj)
 
     fun_lookup["STORE_ATTR"] = process_store_attr
+
+    def process_error(error_type, error):
+        snapshot_id = new_snapshot_id()
+        cursor.execute("INSERT INTO Snapshot VALUES (?, ?, ?, ?)", (
+            snapshot_id, 
+            stack and stack.id, 
+            heap_version,
+            curr_line_no
+        ))
+
+        cursor.execute("INSERT INTO Error VALUES (?, ?, ?, ?)", (
+            new_error_id(),
+            error_type,
+            error,
+            snapshot_id
+        ))
+    
+    fun_lookup["ERROR"] = process_error
             
     activate_snapshots = False
     cursor = conn.cursor()
@@ -749,6 +774,7 @@ def recreate_past(conn, filename):
     next_fun_call_id = 1
     next_object_id = 1
     next_code_file_id = 1
+    next_error_id = 1
     code_files = {}
     stack = None
     # memory address in original program (heap ID) => object in this program
