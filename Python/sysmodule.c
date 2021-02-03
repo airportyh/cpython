@@ -29,6 +29,7 @@ Data members:
 #include "frameobject.h"          // PyFrame_GetBack()
 #include "pydtrace.h"
 #include "osdefs.h"               // DELIM
+#include "rewind.h"
 #include <locale.h>
 
 #ifdef MS_WINDOWS

@@ -356,6 +356,7 @@ pymain_run_file(const PyConfig *config, PyCompilerFlags *cf)
     /* PyRun_AnyFileExFlags(closeit=1) calls fclose(fp) before running code */
     int run = _PyRun_AnyFileObject(fp, filename_obj, 1, cf);
     Py_XDECREF(filename_obj);
+    Rewind_Deactivate();
     return (run != 0);
 }
 
@@ -571,8 +572,6 @@ pymain_run_python(int *exitcode)
     else {
         *exitcode = pymain_run_stdin(config, &cf);
     }
-
-    Rewind_Deactivate();
 
     pymain_repl(config, &cf, exitcode);
     goto done;

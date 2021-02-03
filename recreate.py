@@ -1,6 +1,5 @@
 # Todo
 
-# ability to filter tracing only to the code you choose
 # get zoom debugger to work for Python
 # object tagging
 # queries
@@ -16,6 +15,8 @@
 # try it on a "real" apps
 # optimization: use low level iteration methods whenever possible
 
+# exception log only for uncaught ones (done)
+# ability to filter tracing only to the code you choose based on root dir
 # log exceptions (done)
 # convinience script for debugging python programs
 # should we make stack variables heap objects the same way Python does it? (done)

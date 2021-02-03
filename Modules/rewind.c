@@ -5,8 +5,10 @@
 
 static FILE *rewindLog;
 static char rewindActive = 0;
+static char rewindTraceOn = 0;
 static int lastLine = -1;
 static PyObject *knownObjectIds;
+static PyObject *rewindBaseDir;
 
 inline int equalstr(PyObject *obj, char *string) {
     return PyObject_RichCompareBool(obj, PyUnicode_FromString(string), Py_EQ);
@@ -25,6 +27,14 @@ void Rewind_Activate(const wchar_t *filename) {
     rewindLog = fopen(logFileNameUTF8, "w");
     knownObjectIds = PySet_New(NULL);
     rewindActive = 1;
+
+    const char *baseDir = getenv("REWIND_BASEDIR");
+    if (baseDir != NULL) {
+        rewindBaseDir = PyUnicode_FromString(baseDir);
+        fprintf(rewindLog, "REWIND_BASEDIR(");
+        PyObject_Print(rewindBaseDir, rewindLog, 0);
+        fprintf(rewindLog, ")\n");
+    }
 }
 
 void Rewind_Deactivate() {
@@ -39,6 +49,15 @@ void Rewind_PrintStringTuple(FILE *file, PyObject *stringTuple) {
         PyObject *item = PyTuple_GET_ITEM(stringTuple, i);
         fprintf(file, ", ");
         PyObject_Print(item, file, 0);
+    }
+}
+
+int Rewind_ShouldTrace(PyCodeObject *code) {
+    if (rewindBaseDir) {
+        Py_ssize_t length = PyUnicode_GetLength(code->co_filename);
+        return PyUnicode_Tailmatch(code->co_filename, rewindBaseDir, 0, length, 0);
+    } else {
+        return 1;
     }
 }
 
@@ -58,6 +77,10 @@ void Rewind_PushFrame(PyFrameObject *frame) {
     if (!rewindActive) return;
 
     PyCodeObject *code = frame->f_code;
+    // Check if we should trace this code
+    rewindTraceOn = Rewind_ShouldTrace(code);
+    if (!rewindTraceOn) return;
+
     // when constructor (__init__) is invoked, track the object being built
     if (equalstr(code->co_name, "__init__")) {
         Rewind_TrackObject(*frame->f_localsplus);
@@ -93,21 +116,34 @@ void Rewind_PushFrame(PyFrameObject *frame) {
     }
     fprintf(rewindLog, ")");
     fprintf(rewindLog, "\n");
+
+    // fprintf(rewindLog, "RECURSION_DEPTH(%d)\n", tstate->recursion_depth);
 }
 
 void Rewind_PopFrame(PyFrameObject *frame) {
     if (!rewindActive) return;
 
-    PyCodeObject *code = frame->f_code;
-    fprintf(rewindLog, "POP_FRAME(");
-    PyObject_Print(code->co_filename, rewindLog, 0);
-    fprintf(rewindLog, ", ");
-    PyObject_Print(code->co_name, rewindLog, 0);
-    fprintf(rewindLog, ")\n");
+    if (rewindTraceOn) {
+        PyCodeObject *code = frame->f_code;
+        fprintf(rewindLog, "POP_FRAME(");
+        PyObject_Print(code->co_filename, rewindLog, 0);
+        fprintf(rewindLog, ", ");
+        PyObject_Print(code->co_name, rewindLog, 0);
+        fprintf(rewindLog, ")\n");
+        // fprintf(rewindLog, "RECURSION_DEPTH(%d)\n", tstate->recursion_depth);
+    }
+
+    PyFrameObject *prevFrame = frame->f_back;
+    if (!prevFrame) {
+        rewindTraceOn = 0;
+        return;
+    }
+    // Check if we should trace this code
+    rewindTraceOn = Rewind_ShouldTrace(prevFrame->f_code);
 }
 
 void Rewind_StoreDeref(PyObject *cell, PyObject *value) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject(cell);
     Rewind_TrackObject(value);
@@ -117,7 +153,7 @@ void Rewind_StoreDeref(PyObject *cell, PyObject *value) {
 }
 
 void Rewind_ListAppend(PyListObject *list, PyObject *value) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)list);
     Rewind_TrackObject(value);
@@ -127,7 +163,7 @@ void Rewind_ListAppend(PyListObject *list, PyObject *value) {
 }
 
 void Rewind_ListInsert(PyListObject *list, Py_ssize_t index, PyObject *value) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)list);
     Rewind_TrackObject(value);
@@ -138,7 +174,7 @@ void Rewind_ListInsert(PyListObject *list, Py_ssize_t index, PyObject *value) {
 }
 
 void Rewind_ListExtend(PyListObject *list, PyObject *iterable) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)list);
     Rewind_TrackObject(iterable);
@@ -148,7 +184,7 @@ void Rewind_ListExtend(PyListObject *list, PyObject *iterable) {
 }
 
 void Rewind_ListRemove(PyListObject *list, PyObject *item) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)list);
     Rewind_TrackObject(item);
@@ -158,28 +194,28 @@ void Rewind_ListRemove(PyListObject *list, PyObject *item) {
 }
 
 void Rewind_ListPop(PyListObject *list, Py_ssize_t index) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)list);
     fprintf(rewindLog, "LIST_POP(%lu, %lu)\n", (unsigned long)list, index);
 }
 
 void Rewind_ListClear(PyListObject *list) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)list);
     fprintf(rewindLog, "LIST_CLEAR(%lu)\n", (unsigned long)list);
 }
 
 void Rewind_ListReverse(PyListObject *list) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)list);
     fprintf(rewindLog, "LIST_REVERSE(%lu)\n", (unsigned long)list);
 }
 
 void Rewind_ListSort(PyListObject *list) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)list);
     fprintf(rewindLog, "LIST_SORT(%lu", (unsigned long)list);
@@ -192,7 +228,7 @@ void Rewind_ListSort(PyListObject *list) {
 }
 
 void Rewind_ListStoreSubscript(PyListObject *list, PyObject* key, PyObject* value) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)list);
     Rewind_TrackObject(value);
@@ -217,7 +253,7 @@ void Rewind_ListStoreSubscript(PyListObject *list, PyObject* key, PyObject* valu
 }
 
 void Rewind_ListDeleteSubscript(PyListObject *list, PyObject *key) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)list);
     if (Py_IS_TYPE(key, &PySlice_Type)) {
@@ -237,7 +273,7 @@ void Rewind_ListDeleteSubscript(PyListObject *list, PyObject *key) {
 }
 
 void Rewind_DictStoreSubscript(PyDictObject *dict, PyObject *key, PyObject *value) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)dict);
     Rewind_TrackObject(key);
@@ -250,7 +286,7 @@ void Rewind_DictStoreSubscript(PyDictObject *dict, PyObject *key, PyObject *valu
 }
 
 void Rewind_DictDeleteSubscript(PyDictObject *dict, PyObject *item) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)dict);
     Rewind_TrackObject(item);
@@ -260,7 +296,7 @@ void Rewind_DictDeleteSubscript(PyDictObject *dict, PyObject *item) {
 }
 
 void Rewind_DictUpdate(PyDictObject *dict, PyObject *otherDict) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)dict);
     Rewind_TrackObject(otherDict);
@@ -270,14 +306,14 @@ void Rewind_DictUpdate(PyDictObject *dict, PyObject *otherDict) {
 }
 
 void Rewind_DictClear(PyDictObject *dict) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)dict);
     fprintf(rewindLog, "DICT_CLEAR(%lu)\n", (unsigned long)dict);
 }
 
 void Rewind_DictPop(PyDictObject *dict, PyObject *key) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)dict);
     Rewind_TrackObject(key);
@@ -287,7 +323,7 @@ void Rewind_DictPop(PyDictObject *dict, PyObject *key) {
 }
 
 void Rewind_DictPopItem(PyDictObject *dict, PyObject *key) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)dict);
     Rewind_TrackObject(key);
@@ -297,7 +333,7 @@ void Rewind_DictPopItem(PyDictObject *dict, PyObject *key) {
 }
 
 void Rewind_DictSetDefault(PyDictObject *dict, PyObject *key, PyObject *value) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)dict);
     Rewind_TrackObject(key);
@@ -310,7 +346,7 @@ void Rewind_DictSetDefault(PyDictObject *dict, PyObject *key, PyObject *value) {
 }
 
 void Rewind_SetAdd(PySetObject *set, PyObject *newItem) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)set);
     Rewind_TrackObject(newItem);
@@ -320,7 +356,7 @@ void Rewind_SetAdd(PySetObject *set, PyObject *newItem) {
 }
 
 void Rewind_SetDiscard(PySetObject *set, PyObject *item) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)set);
     Rewind_TrackObject(item);
@@ -330,7 +366,7 @@ void Rewind_SetDiscard(PySetObject *set, PyObject *item) {
 }
 
 void Rewind_SetClear(PySetObject *set) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)set);
     fprintf(rewindLog, "SET_CLEAR(%lu)\n", (unsigned long)set);
@@ -348,7 +384,7 @@ void Rewind_SetPrintItems(PySetObject *set) {
 }
 
 void Rewind_SetUpdate(PySetObject *set) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)set);
     fprintf(rewindLog, "SET_UPDATE(%lu", (unsigned long)set);
@@ -357,7 +393,7 @@ void Rewind_SetUpdate(PySetObject *set) {
 }
 
 void Rewind_YieldValue(PyObject *retval) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject(retval);
     fprintf(rewindLog, "YIELD_VALUE(");
@@ -366,7 +402,7 @@ void Rewind_YieldValue(PyObject *retval) {
 }
 
 void Rewind_StoreName(PyObject *ns, PyObject *name, PyObject *value) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject(ns);
     Rewind_TrackObject(value);
@@ -379,7 +415,7 @@ void Rewind_StoreName(PyObject *ns, PyObject *name, PyObject *value) {
 }
 
 void Rewind_StoreFast(int index, PyObject *value) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject(value);
     fprintf(rewindLog, "STORE_FAST(%d, ", index);
@@ -388,7 +424,7 @@ void Rewind_StoreFast(int index, PyObject *value) {
 }
 
 void Rewind_StoreGlobal(PyObject *ns, PyObject *name, PyObject *value) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject(ns);
     Rewind_TrackObject(value);
@@ -401,7 +437,7 @@ void Rewind_StoreGlobal(PyObject *ns, PyObject *name, PyObject *value) {
 }
 
 void Rewind_DeleteGlobal(PyObject *ns, PyObject *name) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     fprintf(rewindLog, "DELETE_GLOBAL(%lu, ", (unsigned long)ns);
     PyObject_Print(name, rewindLog, 0);
@@ -409,7 +445,7 @@ void Rewind_DeleteGlobal(PyObject *ns, PyObject *name) {
 }
 
 void Rewind_ReturnValue(PyObject *retval) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject(retval);
     fprintf(rewindLog, "RETURN_VALUE(");
@@ -418,7 +454,7 @@ void Rewind_ReturnValue(PyObject *retval) {
 }
 
 void Rewind_SetAttr(PyObject *obj, PyObject *attr, PyObject *value) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     Rewind_TrackObject(obj);
     Rewind_TrackObject(attr);
@@ -431,7 +467,7 @@ void Rewind_SetAttr(PyObject *obj, PyObject *attr, PyObject *value) {
 }
 
 void Rewind_StringInPlaceAdd(PyObject *left, PyObject *right, PyObject *result) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     if (left == result || right == result) {
         Rewind_TrackObject(result);
@@ -588,26 +624,27 @@ void Rewind_serializeObject(FILE *file, PyObject *obj) {
     }
 }
 
-void Rewind_Error(PyObject *exceptionType, PyObject *exception) {
-    if (!rewindActive) return;
+void Rewind_Exception(PyObject *exceptionType, PyObject *exception, PyThreadState *tstate) {
+    if (!rewindTraceOn) return;
 
-    
-    fprintf(rewindLog, "ERROR(");
-    PyTypeObject *type = (PyTypeObject *)exceptionType;
-    fprintf(rewindLog, "\"%s\", ", type->tp_name);
-    PyObject_Print(exception, rewindLog, 0);
-    fprintf(rewindLog, ")\n");
+    if (tstate->recursion_depth == 1) {
+        fprintf(rewindLog, "EXCEPTION(");
+        PyTypeObject *type = (PyTypeObject *)exceptionType;
+        fprintf(rewindLog, "\"%s\", ", type->tp_name);
+        PyObject_Print(PyObject_Repr(exception), rewindLog, 0);
+        fprintf(rewindLog, ")\n");
+    }
 }
 
 void Rewind_Dealloc(PyObject *obj) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     PyObject *id = PyLong_FromLong((long)obj);
     PySet_Discard(knownObjectIds, id);
 }
 
 void Rewind_Log(char *message) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     fprintf(rewindLog, "-- %s", message);
 }
@@ -654,7 +691,7 @@ void printStack(FILE *file, PyObject **stack_pointer, int level) {
 }
 
 void logOp(char *label, PyObject **stack_pointer, int level, PyFrameObject *frame, int oparg) {
-    if (!rewindActive) return;
+    if (!rewindTraceOn) return;
 
     int lineNo = PyFrame_GetLineNumber(frame);
     if (rewindLog) {

@@ -1379,7 +1379,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, PyFrameObject *f, int throwflag)
         return NULL;
     }
 
-    Rewind_PushFrame(f);
+    Rewind_PushFrame(f, tstate);
 
     tstate->frame = f;
 
@@ -4156,7 +4156,6 @@ main_loop:
 
 error:
         /* Double-check exception status. */
-        Rewind_Error(tstate->curexc_type, tstate->curexc_value);
 #ifdef NDEBUG
         if (!_PyErr_Occurred(tstate)) {
             _PyErr_SetString(tstate, PyExc_SystemError,
@@ -4237,6 +4236,8 @@ exception_unwind:
         /* End the loop as we still have an error */
         break;
     } /* main loop */
+    
+    Rewind_Exception(tstate->curexc_type, tstate->curexc_value, tstate);
 
     assert(retval == NULL);
     assert(_PyErr_Occurred(tstate));
@@ -4271,7 +4272,7 @@ exit_eval_frame:
     _Py_LeaveRecursiveCall(tstate);
     tstate->frame = f->f_back;
 
-    Rewind_PopFrame(f);
+    Rewind_PopFrame(f, tstate);
 
     return _Py_CheckFunctionResult(tstate, NULL, retval, __func__);
 }
