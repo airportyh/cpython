@@ -1,20 +1,24 @@
 # Todo
 
+# How do I know if a push frame is for a class?
+# we need to log when a function or method or class is defined, and log it into DB
+# we need a Class table and Function table (maybe can do wo Class...)
 # get zoom debugger to work for Python
 # object tagging
 # queries
 # get classes to work as objects
+# write terminal debugger in python
+
+# compile SSL into Python
 # get pygame working
-# get ascii draw working
 # get flask working
 # get caves (xlrd) working
-# compile SSL into Python
 # collect "real world" python apps
-# write terminal debugger in python
 # have a flag to turn on debug mode
 # try it on a "real" apps
 # optimization: use low level iteration methods whenever possible
 
+# get ascii draw working (done)
 # exception log only for uncaught ones (done)
 # ability to filter tracing only to the code you choose based on root dir
 # log exceptions (done)
@@ -112,7 +116,7 @@ def define_schema(conn):
     c.execute("""
         create table Object (
             id integer primary key,
-            data text  -- JSONR format
+            data text  -- JSON-like format
         );
     """)
 
@@ -751,7 +755,7 @@ def recreate_past(conn, filename):
 
     fun_lookup["STORE_ATTR"] = process_store_attr
 
-    def process_error(error_type, error):
+    def process_exception(exception_type, error):
         snapshot_id = new_snapshot_id()
         cursor.execute("INSERT INTO Snapshot VALUES (?, ?, ?, ?)", (
             snapshot_id, 
@@ -762,12 +766,12 @@ def recreate_past(conn, filename):
 
         cursor.execute("INSERT INTO Error VALUES (?, ?, ?, ?)", (
             new_error_id(),
-            error_type,
+            exception_type,
             error,
             snapshot_id
         ))
     
-    fun_lookup["ERROR"] = process_error
+    fun_lookup["EXCEPTION"] = process_exception
             
     activate_snapshots = False
     cursor = conn.cursor()
