@@ -1379,7 +1379,7 @@ _PyEval_EvalFrameDefault(PyThreadState *tstate, PyFrameObject *f, int throwflag)
         return NULL;
     }
 
-    Rewind_PushFrame(f, tstate);
+    Rewind_PushFrame(f);
 
     tstate->frame = f;
 
@@ -3198,6 +3198,9 @@ main_loop:
                 PyObject *key = PyTuple_GET_ITEM(keys, oparg - i);
                 PyObject *value = PEEK(i + 1);
                 err = PyDict_SetItem(map, key, value);
+                if (err == 0) {
+                    Rewind_DictStoreSubscript((PyDictObject *)map, key, value);
+                }
                 if (err != 0) {
                     Py_DECREF(map);
                     goto error;
@@ -4272,7 +4275,7 @@ exit_eval_frame:
     _Py_LeaveRecursiveCall(tstate);
     tstate->frame = f->f_back;
 
-    Rewind_PopFrame(f, tstate);
+    Rewind_PopFrame(f);
 
     return _Py_CheckFunctionResult(tstate, NULL, retval, __func__);
 }
