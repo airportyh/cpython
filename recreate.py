@@ -478,6 +478,8 @@ def recreate_past(conn, filename):
 
     def process_visit(line_no):
         nonlocal curr_line_no
+        if line_no == -1:
+            return
         curr_line_no = line_no
         if not activate_snapshots:
             return
@@ -755,21 +757,60 @@ def recreate_past(conn, filename):
 
     fun_lookup["STORE_ATTR"] = process_store_attr
 
-    def process_exception(exception_type, error):
-        snapshot_id = new_snapshot_id()
-        cursor.execute("INSERT INTO Snapshot VALUES (?, ?, ?, ?)", (
-            snapshot_id, 
-            stack and stack.id, 
-            heap_version,
-            curr_line_no
-        ))
+    def process_exception(id, exception_type, error, stack_depth):
+        # unwind the stack and see if the exception was caught
+        # expecting the next lines to be pop_frame, exception, pop_frame, exception, ...
+        # until stack_depth is 1, in which case, we know the exception was uncaught
+        # and we'll record it into the Error table
+        def commit_exception():
+            snapshot_id = new_snapshot_id()
+            cursor.execute("INSERT INTO Snapshot VALUES (?, ?, ?, ?)", (
+                snapshot_id, 
+                stack and stack.id, 
+                heap_version,
+                curr_line_no
+            ))
 
-        cursor.execute("INSERT INTO Error VALUES (?, ?, ?, ?)", (
-            new_error_id(),
-            exception_type,
-            error,
-            snapshot_id
-        ))
+            cursor.execute("INSERT INTO Error VALUES (?, ?, ?, ?)", (
+                new_error_id(),
+                exception_type,
+                error,
+                snapshot_id
+            ))
+
+        if stack_depth == 1:
+            commit_exception()
+            return
+
+        state = 1
+        while True:
+            try:
+                line = next(file_iterator)
+                command = parse_line(line)
+                if state == 1:
+                    buffered_lines.append(line)
+                    # expect a pop_frame
+                    if command[0] == "POP_FRAME":
+                        state = 2
+                    else:
+                        break
+                elif state == 2:
+                    # expect an exception
+                    if command[0] == "EXCEPTION":
+                        args = command[1]
+                        assert(args[0] == id)
+                        stack_depth = args[3]
+                        state = 1
+                        if stack_depth == 1:
+                            commit_exception()
+                            break
+                    else:
+                        buffered_lines.append(line)
+                        break
+                else:
+                    raise Exception("This should not happen")
+            except StopIteration:
+                break
     
     fun_lookup["EXCEPTION"] = process_exception
             
@@ -797,7 +838,18 @@ def recreate_past(conn, filename):
     empty_set_oid = _save_object(empty_set, new_obj_id())
     
     file = open(filename, "r")
-    for line in file:
+
+    file_iterator = iter(file)
+    buffered_lines = []
+    # for line in file:
+    while True:
+        if len(buffered_lines) > 0:
+            line = buffered_lines.pop(0)
+        else:
+            try:
+                line = next(file_iterator)
+            except StopIteration:
+                break
         log_line_no += 1
         if log_line_no % 100 == 0:
             print("\rLine " + str(log_line_no), end='')

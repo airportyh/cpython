@@ -624,16 +624,38 @@ void Rewind_serializeObject(FILE *file, PyObject *obj) {
     }
 }
 
+// void Rewind_TrackException(PyObject *exceptionType, PyObject *exception) {
+//     PyObject *id = (PyObject *)PyLong_FromLong((long)exception);
+//     if (PySet_Contains(knownObjectIds, id)) {
+//         Py_DECREF(id);
+//         return;
+//     }
+
+//     PySet_Add(knownObjectIds, id);
+//     fprintf(rewindLog, "NEW_EXCEPTION(%lu, ", (unsigned long)exception);
+//     PyTypeObject *type = (PyTypeObject *)exceptionType;
+//     fprintf(rewindLog, "\"%s\", ", type->tp_name);
+//     PyObject *repr = PyObject_Repr(exception);
+//     if (repr == NULL) {
+//         fprintf(rewindLog, "None");
+//     } else {
+//         PyObject_Print(repr, rewindLog, 0);
+//     }
+//     fprintf(rewindLog, ")\n");
+// }
+
 void Rewind_Exception(PyObject *exceptionType, PyObject *exception, PyThreadState *tstate) {
     if (!rewindTraceOn) return;
 
-    if (tstate->recursion_depth == 1) {
-        fprintf(rewindLog, "EXCEPTION(");
-        PyTypeObject *type = (PyTypeObject *)exceptionType;
-        fprintf(rewindLog, "\"%s\", ", type->tp_name);
-        PyObject_Print(PyObject_Repr(exception), rewindLog, 0);
-        fprintf(rewindLog, ")\n");
+    fprintf(rewindLog, "EXCEPTION(%lu, ", (unsigned long)exception);
+    fprintf(rewindLog, "\"%s\", ", ((PyTypeObject *)exceptionType)->tp_name);
+    PyObject *repr = PyObject_Repr(exception);
+    if (repr == NULL) {
+        fprintf(rewindLog, "None");
+    } else {
+        PyObject_Print(repr, rewindLog, 0);
     }
+    fprintf(rewindLog, ", %d)\n", tstate->recursion_depth);
 }
 
 void Rewind_Dealloc(PyObject *obj) {
@@ -694,6 +716,9 @@ void logOp(char *label, PyObject **stack_pointer, int level, PyFrameObject *fram
     if (!rewindTraceOn) return;
 
     int lineNo = PyFrame_GetLineNumber(frame);
+    // if (lineNo <= 0) {
+    //     return;
+    // }
     if (rewindLog) {
         if (lastLine != lineNo) {
             fprintf(rewindLog, "VISIT(%d)\n", lineNo);
@@ -701,5 +726,5 @@ void logOp(char *label, PyObject **stack_pointer, int level, PyFrameObject *fram
         lastLine = lineNo;
     }
     // printStack(rewindLog, stack_pointer, level);
-    // fprintf(rewindLog, "-- %s(%d) on #%d\n", label, oparg, lineNo);
+    fprintf(rewindLog, "-- %s(%d) on #%d\n", label, oparg, lineNo);
 }
