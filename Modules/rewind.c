@@ -593,14 +593,56 @@ void Rewind_TrackObject(PyObject *obj) {
             Rewind_serializeObject(rewindLog, item);
         }
         fprintf(rewindLog, ")\n");
+    } else if (Py_IS_TYPE(obj, &PyModule_Type)) {
+        fprintf(rewindLog, "NEW_MODULE(%lu)\n", (unsigned long)obj);
     } else {
         PySet_Add(knownObjectIds, id);
         Py_DECREF(id);
+
+        PyObject **dictP = _PyObject_GetDictPtr(obj);
+        PyObject *dict = NULL;
+        if (dictP != NULL) {
+            dict = *dictP;
+        }
+
+        if (dict != NULL) {
+            PyObject *items = PyDict_Items(dict);
+            PyObject *iterator = PySequence_Fast(items, "argument must be iterable");
+            Py_ssize_t n = PySequence_Fast_GET_SIZE(iterator);
+            PyObject **iteratorItems = PySequence_Fast_ITEMS(iterator);
+            for (int i = 0; i < n; i++) {
+                PyObject *item = iteratorItems[i];
+                PyObject *key = PyObject_GetItem(item, PyLong_FromLong(0));
+                PyObject *value = PyObject_GetItem(item, PyLong_FromLong(1));
+                Rewind_TrackObject(key);
+                Rewind_TrackObject(value);
+            }
+            Py_DECREF(iterator);
+        }
 
         fprintf(rewindLog, "NEW_OBJECT(%lu, ", (unsigned long)obj);
         PyTypeObject *type = (PyTypeObject *)PyObject_Type(obj);
         fprintf(rewindLog, "\"%s\", ", type->tp_name);
         Rewind_serializeObject(rewindLog, (PyObject *)type);
+        
+        if (dict != NULL) {
+            PyObject *items = PyDict_Items(dict);
+            PyObject *iterator = PySequence_Fast(items, "argument must be iterable");
+            PyObject **iteratorItems = PySequence_Fast_ITEMS(iterator);
+            Py_ssize_t n = PySequence_Fast_GET_SIZE(iterator);
+            for (int i = 0; i < n; i++) {
+                fprintf(rewindLog, ", ");
+                PyObject *item = iteratorItems[i];
+                PyObject *key = PyObject_GetItem(item, PyLong_FromLong(0));
+                PyObject *value = PyObject_GetItem(item, PyLong_FromLong(1));
+                Rewind_serializeObject(rewindLog, key);
+                fprintf(rewindLog, ", ");
+                Rewind_serializeObject(rewindLog, value);
+            }
+            Py_DECREF(iterator);
+            Py_DECREF(items);
+        }
+        
         fprintf(rewindLog, ")\n");
     }
 }
