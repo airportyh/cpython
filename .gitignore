@@ -125,5 +125,6 @@ Tools/ssl/win32
 /python
 !/Python/
 
-rewind.log
-rewind.sqlite
+*.sqlite
+*.log
+*.rewind
