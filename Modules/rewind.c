@@ -173,14 +173,11 @@ void Rewind_ListInsert(PyListObject *list, Py_ssize_t index, PyObject *value) {
     fprintf(rewindLog, ")\n");
 }
 
-void Rewind_ListExtend(PyListObject *list, PyObject *iterable) {
+void Rewind_ListExtendBegin(PyListObject *list) {
     if (!rewindTraceOn) return;
 
     Rewind_TrackObject((PyObject *)list);
-    Rewind_TrackObject(iterable);
-    fprintf(rewindLog, "LIST_EXTEND(%lu, ", (unsigned long)list);
-    Rewind_serializeObject(rewindLog, iterable);
-    fprintf(rewindLog, ")\n");
+    fprintf(rewindLog, "LIST_EXTEND_BEGIN(%lu)\n", (unsigned long)list);
 }
 
 void Rewind_ListRemove(PyListObject *list, PyObject *item) {

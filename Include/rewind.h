@@ -20,7 +20,7 @@ void Rewind_ListAppend(PyListObject *list, PyObject *value);
 
 void Rewind_ListInsert(PyListObject *list, Py_ssize_t index, PyObject *value);
 
-void Rewind_ListExtend(PyListObject *list, PyObject *iterable);
+void Rewind_ListExtendBegin(PyListObject *list);
 
 void Rewind_ListRemove(PyListObject *list, PyObject *item);
 

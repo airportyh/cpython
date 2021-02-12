@@ -865,7 +865,7 @@ list_extend(PyListObject *self, PyObject *iterable)
     Py_ssize_t i;
     PyObject *(*iternext)(PyObject *);
 
-    Rewind_ListExtend(self, iterable);
+    Rewind_ListExtendBegin(self);
 
     /* Special cases:
        1) lists and tuples which can use PySequence_Fast ops
@@ -903,6 +903,7 @@ list_extend(PyListObject *self, PyObject *iterable)
             PyObject *o = src[i];
             Py_INCREF(o);
             dest[i] = o;
+            Rewind_ListAppend(self, o);
         }
         Py_DECREF(iterable);
         Py_RETURN_NONE;
@@ -958,6 +959,8 @@ list_extend(PyListObject *self, PyObject *iterable)
             if (status < 0)
                 goto error;
         }
+
+        Rewind_ListAppend(self, item);
     }
 
     /* Cut back result list if initial guess was too large. */
