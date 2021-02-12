@@ -171,7 +171,7 @@ def define_schema(conn):
 
     conn.commit()
 
-NUMBER_REGEX = r"(?:-?(?:(?:[1-9][0-9]*)|[0-9])(?:\.[0-9]+)?)|nan|inf|-inf"
+NUMBER_REGEX = r"(?:-?(?:(?:[1-9][0-9]*)|[0-9])(?:\.[0-9]+)?(?:e-?[0-9]+)?)|nan|inf|-inf"
 CHAR_REGEX = r"[^'\\]|(?:\\(?:['\\ntr]|x[0-9A-Fa-f]{2}))"
 CHAR2_REGEX = r"[^\"\\]|(?:\\(?:[\"\\ntr]|x[0-9A-Fa-f]{2}))"
 STRING_REGEX = r"(?:'(?:%s)*')|(?:\"(?:%s)*\")" % (CHAR_REGEX, CHAR2_REGEX)
