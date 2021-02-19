@@ -7,5 +7,6 @@ class Person(object):
     
 bob = Person("Robert")
 james = Person("Jimmy")
+james.name = "Jim"
 
 bob.greet(james)

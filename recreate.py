@@ -1,6 +1,6 @@
 # Todo
 
-# optimization: use low level iteration methods whenever possible
+# make slice assignment work for custom iterable classes
 # we need to log when a function or method is defined, and log it into DB
 # queries
 # get classes to work as objects
@@ -14,6 +14,7 @@
 # have a flag to turn on debug mode
 # try it on a "real" apps
 
+# optimization: use low level iteration methods whenever possible (done)
 # get zoom debugger to work for Python (done)
 # object tagging (done)
 # fetch object attributes when a new object is encountered (done)
@@ -244,7 +245,6 @@ class HeapRef(object):
     def __hash__(self):
         return self.id
 
-
 def recreate_past(conn, filename):
 
     fun_lookup = {}
@@ -283,6 +283,29 @@ def recreate_past(conn, filename):
 
         def __repr__(self):
             return "<" + str(self.id) + ">" + self.name + "(" + str(self.varnames) + ")"
+
+    class TaggedDict(object):
+        def __init__(self, tag, a_dict):
+            self.tag = tag
+            self.dict = a_dict
+        
+        def serialize(self):
+            return "<%s>%s" % (self.tag, serialize(self.dict))
+        
+        def copy(self):
+            return TaggedDict(self.tag, self.dict)
+        
+        def pop(self, key):
+            return self.dict.pop(key)
+        
+        def __delitem__(self, key):
+            del self.dict[key]
+        
+        def setdefault(self, key, value):
+            return self.dict.setdefault(key, value)
+        
+        def __setitem__(self, key, value):
+            self.dict.__setitem__(key, value)
 
     def quote(value):
         return '"' + value.replace('"', '\\"').replace('\\', '\\\\') + '"'
@@ -353,34 +376,28 @@ def recreate_past(conn, filename):
         elif isinstance(value, dict):
             return "{" + ", ".join(map(format_key_value_pair, value.items())) + "}"
         elif isinstance(value, tuple):
-            return "[" + ", ".join(map(serialize_member, value)) + "]"
+            return "<tuple>[" + ", ".join(map(serialize_member, value)) + "]"
         elif isinstance(value, set):
-            return "[" + ", ".join(map(serialize_member, value)) + "]"
+            return "<set>[" + ", ".join(map(serialize_member, value)) + "]"
         else:
             return serialize_member(value)
 
-    def save_object(obj, tag = None):
+    def save_object(obj):
         nonlocal object_id_to_immutable_id_dict
         oid = None
-        if tag is None:
-            if obj == []:
-                oid = empty_list_oid
-            if obj == {}:
-                oid =  empty_dict_oid
-            if obj == empty_set:
-                oid =  empty_set_oid
+        if obj == []:
+            oid = empty_list_oid
+        if obj == {}:
+            oid =  empty_dict_oid
+        if obj == empty_set:
+            oid =  empty_set_oid
 
         if oid is None:
             oid = new_obj_id()
             object_id_to_immutable_id_dict[id(obj)] = oid
-            if isinstance(obj, dict) and "global_test_module" in obj:
-                raise "here"
-            obj_serialized = serialize(obj)
-            if tag:
-                obj_serialized = "<%s>%s" % (tag, obj_serialized)
             cursor.execute("INSERT INTO Object VALUES (?, ?)", (
                 oid,
-                obj_serialized
+                serialize(obj)
             ))
         else:
             object_id_to_immutable_id_dict[id(obj)] = oid
@@ -397,14 +414,14 @@ def recreate_past(conn, filename):
         ))
         return oid
     
-    def update_heap_object(heap_id, new_obj, tag = None):
+    def update_heap_object(heap_id, new_obj):
         nonlocal heap_version
         nonlocal heap_id_to_object_dict
         
         heap_version += 1
 
         heap_id_to_object_dict[heap_id] = new_obj
-        oid = save_object(new_obj, tag)
+        oid = save_object(new_obj)
 
         cursor.execute("INSERT INTO HeapRef VALUES (?, ?, ?)", (
             heap_id,
@@ -586,7 +603,7 @@ def recreate_past(conn, filename):
     fun_lookup["LIST_EXTEND"] = process_list_extend
     
     def process_new_tuple(heap_id, *a_tuple):
-        update_heap_object(heap_id, a_tuple, "tuple")
+        update_heap_object(heap_id, tuple(a_tuple))
     
     fun_lookup["NEW_TUPLE"] = process_new_tuple
 
@@ -604,8 +621,13 @@ def recreate_past(conn, filename):
         a_slice = slice(start, stop, step)
         if isinstance(value, HeapRef):
             value = heap_id_to_object_dict[value.id]
-        new_list[a_slice] = value
-        update_heap_object(heap_id, new_list)
+        try:
+            new_list[a_slice] = value
+            update_heap_object(heap_id, new_list)
+        except TypeError as e:
+            print("e", e)
+            print("tried to assign", value, "to a slice")
+            raise e
     
     fun_lookup["LIST_STORE_SUBSCRIPT_SLICE"] = process_list_store_subscript_slice
 
@@ -751,12 +773,12 @@ def recreate_past(conn, filename):
 
     def process_new_object(heap_id, type_name, type_object, *key_value_pairs):
         # represent an object simply with a dict
-        a_dict = {}
+        a_dict = TaggedDict(type_name, {})
         for i in range(0, len(key_value_pairs), 2):
             key = key_value_pairs[i]
             value = key_value_pairs[i + 1]
             a_dict[key] = value
-        update_heap_object(heap_id, a_dict, type_name)
+        update_heap_object(heap_id, a_dict)
     
     fun_lookup["NEW_OBJECT"] = process_new_object
 
@@ -829,7 +851,7 @@ def recreate_past(conn, filename):
     fun_lookup["EXCEPTION"] = process_exception
 
     def process_new_module(heap_id):
-        update_heap_object(heap_id, {}, "module")
+        update_heap_object(heap_id, TaggedDict("module", {}))
     
     fun_lookup["NEW_MODULE"] = process_new_module
             

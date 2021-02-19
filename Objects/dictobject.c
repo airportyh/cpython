@@ -2651,7 +2651,7 @@ _dict_merge(PyObject *a, PyObject *b, int override, char rewindLog)
     PyDictObject *mp, *other;
     Py_ssize_t i, n;
     PyDictKeyEntry *entry, *ep0;
-
+    
     assert(0 <= override && override <= 2);
 
     /* We accept for the argument either a concrete dictionary object,
@@ -2704,6 +2704,8 @@ _dict_merge(PyObject *a, PyObject *b, int override, char rewindLog)
                     /* Maintain tracking. */
                     _PyObject_GC_TRACK(mp);
                 }
+
+                Rewind_DictUpdate(mp, (PyObject *)other);
 
                 return 0;
             }
