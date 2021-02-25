@@ -198,6 +198,17 @@ ARGUMENT_REGEX = re.compile("(%s|%s|%s|%s|%s)[,)]" % (
     NONE_REGEX
 ))
 LINE_START_REGEX = re.compile(r"([A-Z_]+)\(")
+FROZEN_LIB_REGEX = re.compile(r"<frozen ([_a-z.A-Z0-9]+)>")
+MYDIR = os.path.dirname(os.path.realpath(__file__))
+
+def resolve_filename(filename):
+    m = FROZEN_LIB_REGEX.match(filename)
+    if m:
+        lib = m.group(1)
+        real_filename = MYDIR + "/Lib/" + "/".join(lib.split(".")) + ".py"
+        return real_filename
+    else:
+        return filename
 
 def parse_value(value):
     if value[0] == "*":
@@ -402,6 +413,12 @@ def recreate_past(conn, filename):
         next_fun_id += 1
         return ret
     
+    def new_code_file_id():
+        nonlocal next_code_file_id
+        ret = next_code_file_id
+        next_code_file_id += 1
+        return ret
+    
     def immut_id(obj):
         nonlocal object_id_to_immutable_id_dict
         if id(obj) in object_id_to_immutable_id_dict:
@@ -501,14 +518,16 @@ def recreate_past(conn, filename):
         nonlocal activate_snapshots
         nonlocal next_code_file_id
 
-        if filename not in code_files and os.path.isfile(filename):
-            if not activate_snapshots and name == "<module>":
-                activate_snapshots = True
-            the_file = open(filename, "r")
-            content = the_file.read()
-            the_file.close()
-            code_file_id = next_code_file_id
-            next_code_file_id += 1
+        content = None
+        if filename not in code_files:
+            real_filename = resolve_filename(filename)
+            if os.path.isfile(real_filename):
+                if not activate_snapshots and name == "<module>":
+                    activate_snapshots = True
+                the_file = open(real_filename, "r")
+                content = the_file.read()
+                the_file.close()
+            code_file_id = new_code_file_id()
             cursor.execute("INSERT INTO CodeFile VALUES (?, ?, ?)", (
                 code_file_id,
                 filename,
