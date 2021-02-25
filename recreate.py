@@ -120,29 +120,40 @@ def define_schema(conn):
         );
     """)
 
-    c.execute("""
-        create table FunCall (
-            id integer primary key,
-            fun_name text,
-            locals integer, -- heap ID
-            globals integer, -- heap ID
-            closure_cellvars text, -- json-like object
-            closure_freevars text, -- json-like object
-            parent_id integer,
-            code_file_id integer,
-            
-            constraint FunCall_fk_parent_id foreign key (parent_id)
-                references FunCall(id)
-            constraint FunCall_fk_code_file_id foreign key (code_file_id)
-                references CodeFile(id)
-        );
-    """)
-
     c.execute(""" 
         create table CodeFile (
             id integer primary key,
             file_path text,
             source text
+        );
+    """)
+
+    c.execute("""
+        create table Fun (
+            id integer primary key,
+            name text,
+            code_file_id integer,
+            line_no integer,
+
+            constraint Fun_fk_code_fide_id foreign key (code_file_id)
+                references CodeFile(id)
+        );
+    """)
+
+    c.execute("""
+        create table FunCall (
+            id integer primary key,
+            fun_id integer,
+            locals integer, -- heap ID
+            globals integer, -- heap ID
+            closure_cellvars text, -- json-like object
+            closure_freevars text, -- json-like object
+            parent_id integer,
+            
+            constraint FunCall_fk_parent_id foreign key (parent_id)
+                references FunCall(id)
+            constraint FunCall_fk_fun_id foreign key (fun_id)
+                references Fun(id)
         );
     """)
 
@@ -203,6 +214,8 @@ def parse_value(value):
 def parse_line(line):
     args = []
     m = LINE_START_REGEX.match(line)
+    if m is None:
+        raise Exception("Parse error on line '%s'" % line)
     fun_name = m.group(1)
     start_idx = m.span()[1]
     while True:
@@ -251,49 +264,98 @@ def recreate_past(conn, filename):
     
     class FunCall(object):
         def __init__(self, 
-            id, name, 
-            local_varnames, 
+            id, 
+            fun,
             local_vars_id,
             global_vars_id, 
             cell_vars,
             free_vars,
-            parent,
-            code_file_id):
+            parent):
             self.id = id
-            self.name = name
-            self.local_varnames = local_varnames
+            self.fun = fun
             self.local_vars_id = local_vars_id
             self.global_vars_id = global_vars_id
             self.cell_vars = cell_vars
             self.free_vars = free_vars
             self.parent = parent
-            self.code_file_id = code_file_id
 
         def save(self, cursor):
-            cursor.execute("INSERT INTO FunCall VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (
+            cursor.execute("INSERT INTO FunCall VALUES (?, ?, ?, ?, ?, ?, ?)", (
                 self.id,
-                self.name,
+                self.fun.id,
                 self.local_vars_id,
                 self.global_vars_id,
                 serialize(self.cell_vars),
                 serialize(self.free_vars),
-                self.parent and self.parent.id,
-                self.code_file_id
+                self.parent and self.parent.id
             ))
 
         def __repr__(self):
             return "<" + str(self.id) + ">" + self.name + "(" + str(self.varnames) + ")"
 
-    class TaggedDict(object):
-        def __init__(self, tag, a_dict):
-            self.tag = tag
-            self.dict = a_dict
+    class Fun(object):
+        def __init__(self,
+            id, 
+            name,
+            code_file_id,
+            line_no,
+            local_varnames, 
+            cell_varnames, 
+            free_varnames):
+            self.id = id
+            self.name = name
+            self.code_file_id = code_file_id
+            self.line_no = line_no
+            self.local_varnames = local_varnames
+            self.cell_varnames = cell_varnames
+            self.free_varnames = free_varnames
         
-        def serialize(self):
-            return "<%s>%s" % (self.tag, serialize(self.dict))
+        def save(self, cursor):
+            cursor.execute("INSERT INTO Fun VALUES (?, ?, ?, ?)", (
+                self.id,
+                self.name,
+                self.code_file_id,
+                self.line_no
+            ))
+
+    class Object(object):
+        def __init__(self, class_name, attr_dict_id = None):
+            self.class_name = class_name
+            self.attr_dict_id = attr_dict_id
         
         def copy(self):
-            return TaggedDict(self.tag, self.dict)
+            return Object(self.class_name, self.attr_dict_id)
+        
+        def serialize(self):
+            if self.attr_dict_id is None:
+                return '<%s>{}' % self.class_name
+            return '<%s>{"__dict__": %s}' % (
+                self.class_name, serialize(self.attr_dict_id))
+
+    class Cell(object):
+        def __init__(self, ob_ref = None):
+            self.ob_ref = ob_ref
+        
+        def copy(self):
+            return Cell(self.ob_ref)
+        
+        def serialize(self):
+            return '<cell>{"ob_ref": %s}' % serialize(self.ob_ref)
+
+    class DerivedDict(object):
+        def __init__(self, typename, a_dict, attr_dict_id = None):
+            self.typename = typename
+            self.dict = a_dict
+            self.attr_dict_id = attr_dict_id
+        
+        def serialize(self):
+            if self.attr_dict_id is None:
+                return '<%s>{ "self": %s }' % (self.typename, serialize(self.dict))
+            return '<%s>{ "self": %s, "__dict__": %s }' % (
+                self.typename, serialize(self.dict), serialize(self.attr_dict_id))
+        
+        def copy(self):
+            return DerivedDict(self.typename, self.dict, self.attr_dict_id)
         
         def pop(self, key):
             return self.dict.pop(key)
@@ -332,6 +394,12 @@ def recreate_past(conn, filename):
         nonlocal next_error_id
         ret = next_error_id
         next_error_id += 1
+        return ret
+
+    def new_fun_id():
+        nonlocal next_fun_id
+        ret = next_fun_id
+        next_fun_id += 1
         return ret
     
     def immut_id(obj):
@@ -461,40 +529,54 @@ def recreate_past(conn, filename):
             value = values[i]
             var_dict[varname] = value
         return var_dict
-
-    def process_push_frame(filename, name, global_vars_id, local_vars_id, *rest):
-        nonlocal stack
-        
+    
+    def process_new_code(heap_id, filename, name, line_no, *rest):
         num_local_vars, local_varnames, rest = grab_var_args(rest)
         num_cell_vars, cell_varnames, rest = grab_var_args(rest)
         num_free_vars, free_varnames, rest = grab_var_args(rest)
 
-        local_vars = rest[0:num_local_vars]
-        rest = rest[num_local_vars:]
-        cell_vars = rest[0:num_cell_vars]
-        free_vars = rest[num_cell_vars:]
-
-        local_var_dict = gen_var_dict(local_varnames, local_vars)
-        cell_var_dict = gen_var_dict(cell_varnames, cell_vars)
-        free_var_dict = gen_var_dict(free_varnames, free_vars)
-
-        #print("push_frame", name, "cell_var_dict", cell_var_dict, "free_var_dict", free_var_dict)
-
         ensure_code_file_saved(filename, name)
         code_file_id = code_files.get(filename)
+        fun = Fun(
+            new_fun_id(),
+            name,
+            code_file_id,
+            line_no,
+            local_varnames,
+            cell_varnames, free_varnames)
+        
+        fun.save(cursor)
+
+        fun_dict[heap_id] = fun
+    
+    fun_lookup["NEW_CODE"] = process_new_code
+
+    def process_push_frame(code_heap_id, global_vars_id, local_vars_id, *rest):
+        nonlocal stack
+
+        fun = fun_dict[code_heap_id]
+
+        local_vars = rest[0:len(fun.local_varnames)]
+        rest = rest[len(fun.local_varnames):]
+        cell_vars = rest[0:len(fun.cell_varnames)]
+        free_vars = rest[len(fun.cell_varnames):]
+
+        local_var_dict = gen_var_dict(fun.local_varnames, local_vars)
+        cell_var_dict = gen_var_dict(fun.cell_varnames, cell_vars)
+        free_var_dict = gen_var_dict(fun.free_varnames, free_vars)
+
+        #print("push_frame", name, "cell_var_dict", cell_var_dict, "free_var_dict", free_var_dict)
 
         update_heap_object(local_vars_id, local_var_dict)
 
         fun_call = FunCall(
             new_fun_call_id(),
-            name,
-            local_varnames,
+            fun,
             local_vars_id,
             global_vars_id,
             cell_var_dict,
             free_var_dict,
-            stack,
-            code_file_id
+            stack
         )
         fun_call.save(cursor)
 
@@ -528,7 +610,7 @@ def recreate_past(conn, filename):
     fun_lookup["STORE_GLOBAL"] = process_store_name
     
     def process_store_fast(index, value):
-        varname = stack.local_varnames[index]
+        varname = stack.fun.local_varnames[index]
         local_vars = heap_id_to_object_dict[stack.local_vars_id]
         new_local_vars = local_vars.copy()
         new_local_vars[varname] = value
@@ -536,10 +618,16 @@ def recreate_past(conn, filename):
     
     fun_lookup["STORE_FAST"] = process_store_fast
 
+    def process_new_cell(heap_id):
+        cell = Cell()
+        update_heap_object(heap_id, cell)
+    
+    fun_lookup["NEW_CELL"] = process_new_cell
+
     def process_store_deref(heap_id, value):
         cell = heap_id_to_object_dict[heap_id]
         new_cell = cell.copy()
-        new_cell["ob_ref"] = value
+        new_cell.ob_ref = value
         update_heap_object(heap_id, new_cell)
 
     fun_lookup["STORE_DEREF"] = process_store_deref
@@ -564,10 +652,12 @@ def recreate_past(conn, filename):
     fun_lookup["RETURN_VALUE"] = process_return_value
     fun_lookup["YIELD_VALUE"] = process_return_value
 
-    def process_pop_frame(filename, name):
+    def process_pop_frame(fun_heap_id):
         nonlocal stack
+
         try:
-            assert stack.name == name
+            fun = fun_dict[fun_heap_id]
+            assert stack.fun == fun
             stack = stack.parent
         except:
             print(log_line_no, curr_line_no, line)
@@ -705,6 +795,16 @@ def recreate_past(conn, filename):
     
     fun_lookup["NEW_DICT"] = process_new_dict
     
+    def process_new_derived_dict(typename, heap_id, *entries):
+        a_dict = DerivedDict(typename, {})
+        for i in range(0, len(entries), 2):
+            key = entries[i]
+            value = entries[i + 1]
+            a_dict[key] = value
+        update_heap_object(heap_id, a_dict)
+
+    fun_lookup["NEW_DERIVED_DICT"] = process_new_derived_dict
+
     def process_dict_store_subscript(heap_id, key, value):
         a_dict = heap_id_to_object_dict[heap_id]
         new_dict = a_dict.copy()
@@ -743,6 +843,13 @@ def recreate_past(conn, filename):
     
     fun_lookup["DICT_SET_DEFAULT"] = process_dict_setdefault
 
+    def process_dict_replace(heap_id, other_dict):
+        other_dict = heap_id_to_object_dict[other_dict.id]
+        new_dict = other_dict.copy()
+        update_heap_object(heap_id, new_dict)
+    
+    fun_lookup["DICT_REPLACE"] = process_dict_replace
+
     def process_new_set(heap_id, *items):
         a_set = set(items)
         update_heap_object(heap_id, a_set)
@@ -771,29 +878,22 @@ def recreate_past(conn, filename):
 
     fun_lookup["SET_DISCARD"] = process_set_discard
 
-    def process_new_object(heap_id, type_name, type_object, *key_value_pairs):
-        # represent an object simply with a dict
-        a_dict = TaggedDict(type_name, {})
-        for i in range(0, len(key_value_pairs), 2):
-            key = key_value_pairs[i]
-            value = key_value_pairs[i + 1]
-            a_dict[key] = value
-        update_heap_object(heap_id, a_dict)
+    def process_new_object(heap_id, type_name, type_object, attr_dict_id = None):
+        obj = Object(type_name, attr_dict_id and HeapRef(attr_dict_id))
+        update_heap_object(heap_id, obj)
     
     fun_lookup["NEW_OBJECT"] = process_new_object
 
-    def process_store_attr(heap_id, name, value):
-        if heap_id not in heap_id_to_object_dict:
-            return
-        an_obj = heap_id_to_object_dict[heap_id]
-        # objects represented by dicts
-        new_obj = an_obj.copy()
-        new_obj[name] = value
-        update_heap_object(heap_id, new_obj)
+    def process_object_assoc_dict(object_heap_id, dict_heap_id):
+        obj = heap_id_to_object_dict[object_heap_id]
+        new_obj = obj.copy()
+        new_obj.attr_dict_id = HeapRef(dict_heap_id)
+        update_heap_object(object_heap_id, new_obj)
 
-    fun_lookup["STORE_ATTR"] = process_store_attr
+    fun_lookup["OBJECT_ASSOC_DICT"] = process_object_assoc_dict
 
     def process_exception(id, exception_type, error, stack_depth):
+        nonlocal log_line_no
         # unwind the stack and see if the exception was caught
         # expecting the next lines to be pop_frame, exception, pop_frame, exception, ...
         # until stack_depth is 1, in which case, we know the exception was uncaught
@@ -822,6 +922,9 @@ def recreate_past(conn, filename):
         while True:
             try:
                 line = next(file_iterator)
+                log_line_no += 1
+                if line.startswith("--"):
+                    continue
                 command = parse_line(line)
                 if state == 1:
                     buffered_lines.append(line)
@@ -851,7 +954,7 @@ def recreate_past(conn, filename):
     fun_lookup["EXCEPTION"] = process_exception
 
     def process_new_module(heap_id):
-        update_heap_object(heap_id, TaggedDict("module", {}))
+        update_heap_object(heap_id, Object("module"))
     
     fun_lookup["NEW_MODULE"] = process_new_module
             
@@ -862,7 +965,9 @@ def recreate_past(conn, filename):
     next_object_id = 1
     next_code_file_id = 1
     next_error_id = 1
+    next_fun_id = 1
     code_files = {}
+    fun_dict = {}
     stack = None
     # memory address in original program (heap ID) => object in this program
     heap_id_to_object_dict = {}
@@ -896,12 +1001,12 @@ def recreate_past(conn, filename):
             print("\rLine " + str(log_line_no), end='')
         if line.startswith("--"):
             continue
-        command = parse_line(line)
-        if command[0] not in fun_lookup:
-            print("Warning: no process function for command %s on line %d" % (command[0], log_line_no))
-            continue
-        fun = fun_lookup[command[0]]
         try:
+            command = parse_line(line)    
+            if command[0] not in fun_lookup:
+                print("Warning: no process function for command %s on line %d" % (command[0], log_line_no))
+                continue
+            fun = fun_lookup[command[0]]
             fun(*command[1])
             if log_line_no % 500 == 0:
                 conn.commit()
@@ -918,6 +1023,10 @@ def main():
         print("Please provide a .rewind file.")
         return
     filename = sys.argv[1]
+
+    if not filename.endswith(".rewind"):
+        print("Please provide a .rewind file.")
+        return
     
     sqlite_filename = re.sub("\.rewind$", ".sqlite", filename)
     print("Reading from " + filename)

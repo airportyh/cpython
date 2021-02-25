@@ -3,6 +3,7 @@
 
 #include "Python.h"
 #include "structmember.h"         // PyMemberDef
+#include "rewind.h"
 
 PyObject *
 PyMember_GetOne(const char *addr, PyMemberDef *l)
@@ -101,6 +102,8 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
 {
     PyObject *oldv;
 
+    PyObject *objaddr = (PyObject *)addr;
+
     addr += l->offset;
 
     if ((l->flags & READONLY))
@@ -133,6 +136,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
             *(char*)addr = (char) 1;
         else
             *(char*)addr = (char) 0;
+        Rewind_ObjectSetBoolSlot(objaddr, l, *addr);
         break;
         }
     case T_BYTE:{
@@ -140,6 +144,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         *(char*)addr = (char)long_val;
+        Rewind_ObjectSetByteSlot(objaddr, l, *addr);
         /* XXX: For compatibility, only warn about truncations
            for now. */
         if ((long_val > CHAR_MAX) || (long_val < CHAR_MIN))
@@ -151,6 +156,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         *(unsigned char*)addr = (unsigned char)long_val;
+        Rewind_ObjectSetUByteSlot(objaddr, l, (unsigned char)long_val);
         if ((long_val > UCHAR_MAX) || (long_val < 0))
             WARN("Truncation of value to unsigned char");
         break;
@@ -160,6 +166,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         *(short*)addr = (short)long_val;
+        Rewind_ObjectSetShortSlot(objaddr, l, (short)long_val);
         if ((long_val > SHRT_MAX) || (long_val < SHRT_MIN))
             WARN("Truncation of value to short");
         break;
@@ -169,6 +176,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         *(unsigned short*)addr = (unsigned short)long_val;
+        Rewind_ObjectSetUShortSlot(objaddr, l, (unsigned short)long_val);
         if ((long_val > USHRT_MAX) || (long_val < 0))
             WARN("Truncation of value to unsigned short");
         break;
@@ -178,6 +186,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         if ((long_val == -1) && PyErr_Occurred())
             return -1;
         *(int *)addr = (int)long_val;
+        Rewind_ObjectSetIntSlot(objaddr, l, (unsigned short)long_val);
         if ((long_val > INT_MAX) || (long_val < INT_MIN))
             WARN("Truncation of value to int");
         break;
@@ -196,18 +205,22 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
             WARN("Writing negative value into unsigned field");
         } else
             *(unsigned int *)addr = (unsigned int)ulong_val;
+        Rewind_ObjectSetUIntSlot(objaddr, l, (unsigned int)ulong_val);
         if (ulong_val > UINT_MAX)
             WARN("Truncation of value to unsigned int");
         break;
         }
     case T_LONG:{
-        *(long*)addr = PyLong_AsLong(v);
+        long long_val = PyLong_AsLong(v);
+        *(long*)addr = long_val;
+        Rewind_ObjectSetLongSlot(objaddr, l, long_val);
         if ((*(long*)addr == -1) && PyErr_Occurred())
             return -1;
         break;
         }
     case T_ULONG:{
-        *(unsigned long*)addr = PyLong_AsUnsignedLong(v);
+        unsigned long ulong_val = PyLong_AsUnsignedLong(v);;
+        *(unsigned long*)addr = ulong_val;
         if ((*(unsigned long*)addr == (unsigned long)-1)
             && PyErr_Occurred()) {
             /* XXX: For compatibility, accept negative int values
@@ -219,10 +232,13 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
                 return -1;
             WARN("Writing negative value into unsigned field");
         }
+        Rewind_ObjectSetULongSlot(objaddr, l, ulong_val);
         break;
         }
     case T_PYSSIZET:{
-        *(Py_ssize_t*)addr = PyLong_AsSsize_t(v);
+        Py_ssize_t size = PyLong_AsSsize_t(v);
+        *(Py_ssize_t*)addr = size;
+        Rewind_ObjectSetPySizeSlot(objaddr, l, size);
         if ((*(Py_ssize_t*)addr == (Py_ssize_t)-1)
             && PyErr_Occurred())
                         return -1;
@@ -233,18 +249,23 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
         if ((double_val == -1) && PyErr_Occurred())
             return -1;
         *(float*)addr = (float)double_val;
+        Rewind_ObjectSetFloatSlot(objaddr, l, (float)double_val);
         break;
         }
-    case T_DOUBLE:
-        *(double*)addr = PyFloat_AsDouble(v);
+    case T_DOUBLE:{
+        double double_val = PyFloat_AsDouble(v);
+        *(double*)addr = double_val;
+        Rewind_ObjectSetDoubleSlot(objaddr, l, double_val);
         if ((*(double*)addr == -1) && PyErr_Occurred())
             return -1;
         break;
+        }
     case T_OBJECT:
     case T_OBJECT_EX:
         Py_XINCREF(v);
         oldv = *(PyObject **)addr;
         *(PyObject **)addr = v;
+        Rewind_ObjectSetObjectSlot(objaddr, l, v);
         Py_XDECREF(oldv);
         break;
     case T_CHAR: {
@@ -257,6 +278,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
             return -1;
         }
         *(char*)addr = string[0];
+        Rewind_ObjectSetCharSlot(objaddr, l, string[0]);
         break;
         }
     case T_STRING:
@@ -266,6 +288,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
     case T_LONGLONG:{
         long long value;
         *(long long*)addr = value = PyLong_AsLongLong(v);
+        Rewind_ObjectSetLongLongSlot(objaddr, l, value);
         if ((value == -1) && PyErr_Occurred())
             return -1;
         break;
@@ -278,6 +301,7 @@ PyMember_SetOne(char *addr, PyMemberDef *l, PyObject *v)
             *(unsigned long long*)addr = value = PyLong_AsUnsignedLongLong(v);
         else
             *(unsigned long long*)addr = value = PyLong_AsLong(v);
+        Rewind_ObjectSetULongLongSlot(objaddr, l, value);
         if ((value == (unsigned long long)-1) && PyErr_Occurred())
             return -1;
         break;

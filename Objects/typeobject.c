@@ -9,6 +9,7 @@
 #include "pycore_unionobject.h"   // _Py_Union(), _Py_union_type_or
 #include "frameobject.h"
 #include "structmember.h"         // PyMemberDef
+#include "rewind.h"
 
 #include <ctype.h>
 
@@ -5715,7 +5716,7 @@ add_subclass(PyTypeObject *base, PyTypeObject *type)
         return -1;
     newobj = PyWeakref_NewRef((PyObject *)type, NULL);
     if (newobj != NULL) {
-        result = PyDict_SetItem(dict, key, newobj);
+        result = _PyDict_SetItem(dict, key, newobj, 0);
         Py_DECREF(newobj);
     }
     Py_DECREF(key);
@@ -5751,7 +5752,7 @@ remove_subclass(PyTypeObject *base, PyTypeObject *type)
     }
     assert(PyDict_CheckExact(dict));
     key = PyLong_FromVoidPtr((void *) type);
-    if (key == NULL || PyDict_DelItem(dict, key)) {
+    if (key == NULL || _PyDict_DelItem(dict, key, 0)) {
         /* This can happen if the type initialization errored out before
            the base subclasses were updated (e.g. a non-str __qualname__
            was passed in the type dict). */

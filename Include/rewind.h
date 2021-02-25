@@ -1,12 +1,15 @@
 #include "Python.h"
+#include "structmember.h"
 
 void Rewind_Activate(const wchar_t * filename);
 
 void Rewind_Deactivate(void);
 
-int Rewind_isSimpleType(PyObject *obj);
+int Rewind_IsSimpleType(PyObject *obj);
 
 void Rewind_Cleanup(void);
+
+void Rewind_CallFunction(PyCodeObject *code);
 
 void Rewind_PushFrame(PyFrameObject *frame);
 
@@ -42,7 +45,7 @@ void Rewind_DictStoreSubscript(PyDictObject *dict, PyObject *key, PyObject *valu
 
 void Rewind_DictDeleteSubscript(PyDictObject *dict, PyObject *item);
 
-void Rewind_DictUpdate(PyDictObject *dict, PyObject *otherDict);
+void Rewind_DictReplace(PyDictObject *dict, PyObject *otherDict);
 
 void Rewind_DictClear(PyDictObject *dict);
 
@@ -72,24 +75,58 @@ void Rewind_DeleteGlobal(PyObject *ns, PyObject *name);
 
 void Rewind_ReturnValue(PyObject *retval);
 
-void Rewind_SetAttr(PyObject *obj, PyObject *attr, PyObject *value);
-
 void Rewind_StringInPlaceAdd(PyObject *left, PyObject *right, PyObject *result);
+
+void Rewind_ObjectAssocDict(PyObject *obj, PyObject *dict);
 
 void Rewind_Exception(PyObject *exceptionType, PyObject *exception, PyThreadState *tstate);
 
 void Rewind_Dealloc(PyObject *obj);
 
+void Rewind_TypeDict(PyObject *dict);
+
 void Rewind_FlushDeallocatedIds(void);
 
 void Rewind_TrackObject(PyObject *obj);
 
-void Rewind_serializeObject(FILE *file, PyObject *obj);
+void Rewind_SerializeObject(FILE *file, PyObject *obj);
 
 void Rewind_Log(char *message);
 
-void printObject(FILE *file, PyObject *obj);
+void Rewind_PrintObject(FILE *file, PyObject *obj);
 
-void printStack(FILE *file, PyObject **stack_pointer, int level);
+void Rewind_ObjectSetBoolSlot(PyObject *obj, PyMemberDef *l, char value);
 
-void logOp(char *label, PyObject **stack_pointer, int level, PyFrameObject *frame, int oparg);
+void Rewind_ObjectSetByteSlot(PyObject *obj, PyMemberDef *l, char value);
+
+void Rewind_ObjectSetUByteSlot(PyObject *obj, PyMemberDef *l, unsigned char value);
+
+void Rewind_ObjectSetShortSlot(PyObject *obj, PyMemberDef *l, short value);
+
+void Rewind_ObjectSetUShortSlot(PyObject *obj, PyMemberDef *l, unsigned short value);
+
+void Rewind_ObjectSetIntSlot(PyObject *obj, PyMemberDef *l, int value);
+
+void Rewind_ObjectSetUIntSlot(PyObject *obj, PyMemberDef *l, unsigned int value);
+
+void Rewind_ObjectSetLongSlot(PyObject *obj, PyMemberDef *l, long value);
+
+void Rewind_ObjectSetULongSlot(PyObject *obj, PyMemberDef *l, unsigned long value);
+
+void Rewind_ObjectSetPySizeSlot(PyObject *obj, PyMemberDef *l, Py_ssize_t value);
+
+void Rewind_ObjectSetFloatSlot(PyObject *obj, PyMemberDef *l, float value);
+
+void Rewind_ObjectSetDoubleSlot(PyObject *obj, PyMemberDef *l, double value);
+
+void Rewind_ObjectSetObjectSlot(PyObject *obj, PyMemberDef *l, PyObject *value);
+
+void Rewind_ObjectSetCharSlot(PyObject *obj, PyMemberDef *l, char value);
+
+void Rewind_ObjectSetLongLongSlot(PyObject *obj, PyMemberDef *l, long long value);
+
+void Rewind_ObjectSetULongLongSlot(PyObject *obj, PyMemberDef *l, unsigned long long value);
+
+void Rewind_PrintStack(PyObject **stack_pointer, int level);
+
+void Rewind_Op(char *label, PyFrameObject *frame, int oparg, int numArgs, ...);

@@ -10,3 +10,5 @@ james = Person("Jimmy")
 james.name = "Jim"
 
 bob.greet(james)
+
+print("Person.__module__", Person.__module__)

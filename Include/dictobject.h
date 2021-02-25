@@ -22,7 +22,9 @@ PyAPI_FUNC(PyObject *) PyDict_New(void);
 PyAPI_FUNC(PyObject *) PyDict_GetItem(PyObject *mp, PyObject *key);
 PyAPI_FUNC(PyObject *) PyDict_GetItemWithError(PyObject *mp, PyObject *key);
 PyAPI_FUNC(int) PyDict_SetItem(PyObject *mp, PyObject *key, PyObject *item);
+int _PyDict_SetItem(PyObject *op, PyObject *key, PyObject *value, char rewindLog);
 PyAPI_FUNC(int) PyDict_DelItem(PyObject *mp, PyObject *key);
+int _PyDict_DelItem(PyObject *op, PyObject *key, char rewindLog);
 PyAPI_FUNC(void) PyDict_Clear(PyObject *mp);
 PyAPI_FUNC(int) PyDict_Next(
     PyObject *mp, Py_ssize_t *pos, PyObject **key, PyObject **value);

@@ -179,7 +179,7 @@ _set_add_entry(PySetObject *so, PyObject *key, Py_hash_t hash, char rewindLog)
 
 static int
 set_add_entry(PySetObject *so, PyObject *key, Py_hash_t hash) {
-    return _set_add_entry(so, key, hash, 0);
+    return _set_add_entry(so, key, hash, 1);
 }
 
 /*
@@ -342,7 +342,7 @@ _set_discard_entry(PySetObject *so, PyObject *key, Py_hash_t hash, char rewindLo
 
 static int
 set_discard_entry(PySetObject *so, PyObject *key, Py_hash_t hash) {
-    return _set_discard_entry(so, key, hash, 0);
+    return _set_discard_entry(so, key, hash, 1);
 }
 
 static int
@@ -361,7 +361,7 @@ _set_add_key(PySetObject *so, PyObject *key, char rewindLog)
 
 static int
 set_add_key(PySetObject *so, PyObject *key) {
-    return _set_add_key(so, key, 0);
+    return _set_add_key(so, key, 1);
 }
 
 static int
@@ -394,7 +394,7 @@ _set_discard_key(PySetObject *so, PyObject *key, char rewindLog)
 
 static int
 set_discard_key(PySetObject *so, PyObject *key) {
-    return _set_discard_key(so, key, 0);
+    return _set_discard_key(so, key, 1);
 }
 
 static void
@@ -958,7 +958,7 @@ _set_update_internal(PySetObject *so, PyObject *other, char rewindLog)
 
 static int
 set_update_internal(PySetObject *so, PyObject *other) {
-    return _set_update_internal(so, other, 0);
+    return _set_update_internal(so, other, 1);
 }
 
 static PyObject *
@@ -2389,7 +2389,7 @@ __PySet_Update(PyObject *set, PyObject *iterable, char rewindLog)
 
 int
 _PySet_Update(PyObject *set, PyObject *iterable) {
-    return __PySet_Update(set, iterable, 0);
+    return __PySet_Update(set, iterable, 1);
 }
 
 /* Exported for the gdb plugin's benefit. */

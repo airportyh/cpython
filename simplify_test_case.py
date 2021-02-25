@@ -4,40 +4,11 @@ import subprocess
 import re
 from shutil import copyfile
 import random
-KEY_ERROR_REGEX = re.compile(r"KeyError: HeapRef\([0-9]+\)$")
-
-def execute3():
-    cmd1 = subprocess.run(["python3", "tests/test2.py"], 
-        stdout=subprocess.PIPE, 
-        stderr=subprocess.PIPE)
-    if cmd1.returncode == 0:
-        return False
-    cmd1stderr = cmd1.stderr.decode("utf-8")
-    errlines = cmd1stderr.split("\n")
-    match1 = errlines[-2] == 'SyntaxError: invalid syntax'
-    match2 = errlines[-4] == '    log_file.flush()'
-    return bool(match1 and match2)
-
-def execute2():
-    cmd1 = subprocess.run(["python3", "tests/test2.py"], 
-        stdout=subprocess.PIPE, 
-        stderr=subprocess.PIPE)
-    if cmd1.returncode == 0:
-        return False
-    cmd1stdout = cmd1.stdout.decode("utf-8")
-    if cmd1stdout:
-        print(cmd1stdout)
-    cmd1stderr = cmd1.stderr.decode("utf-8")
-    if cmd1stderr:
-        print(cmd1stderr)
-    errlines = cmd1stderr.split("\n")
-    match1 = errlines[-4] == '    not_covered &= ~member_value'
-    match2 = errlines[-2] == 'SyntaxError: invalid syntax'
-    return bool(match1 and match2)
+KEY_ERROR_REGEX = re.compile(r"KeyError: [0-9]+$")
 
 def execute():
     print("Command 1")
-    cmd1 = subprocess.run(["./python.exe", "tests/test2.py"], 
+    cmd1 = subprocess.run(["./python.exe", "tests/object_test.py"], 
         stdout=subprocess.PIPE, 
         stderr=subprocess.PIPE)
     cmd1stdout = cmd1.stdout.decode("utf-8")
@@ -51,7 +22,33 @@ def execute():
     
     print("Command 2")
     cmd2 = subprocess.run(
-        ["python3", "recreate.py", "tests/test2.rewind"], 
+        ["python3", "recreate.py", "tests/object_test.rewind"], 
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    cmd2stdout = cmd2.stdout.decode("utf-8")
+    if cmd2stdout:
+        print(cmd2stdout)
+    cmd2stderr = cmd2.stderr.decode("utf-8")
+    if cmd2stderr:
+        print(cmd2stderr)
+
+    print("Command 3")
+    cmd1 = subprocess.run(["./python.exe", "tests/object_test.py"], 
+        stdout=subprocess.PIPE, 
+        stderr=subprocess.PIPE)
+    cmd1stdout = cmd1.stdout.decode("utf-8")
+    if cmd1stdout:
+        print(cmd1stdout)
+    cmd1stderr = cmd1.stderr.decode("utf-8")
+    if cmd1stderr:
+        print(cmd1stderr)
+    if cmd1.returncode != 0:
+        return False
+    
+    print("Command 4")
+    cmd2 = subprocess.run(
+        ["python3", "recreate.py", "tests/object_test.rewind"], 
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
@@ -67,11 +64,12 @@ def execute():
     
     stderr = cmd2.stderr.decode("utf-8")
     errlines = stderr.split("\n")
-    return errlines[-2] == 'TypeError: list indices must be integers or slices, not HeapRef'
+    m = KEY_ERROR_REGEX.match(errlines[-2])
+    return m is not None
     
 def main():
-    # print(execute3())
-    simplify_test_case(execute3, "tests/test2.py")
+    # print(execute())
+    simplify_test_case(execute, "tests/fakecontextlib.py")
     
 def simplify_test_case(execute, input_file):
     copyfile(input_file, input_file + ".original")

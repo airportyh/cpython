@@ -1327,7 +1327,11 @@ _PyObject_GenericSetAttrWithDict(PyObject *obj, PyObject *name,
             }
             goto done;
         }
+        char initDict = (*dictptr) == NULL;
         res = _PyObjectDict_SetItem(tp, dictptr, name, value);
+        if (initDict) {
+            Rewind_ObjectAssocDict(obj, *dictptr);
+        }
     }
     else {
         Py_INCREF(dict);

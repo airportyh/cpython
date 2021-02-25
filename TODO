@@ -1,5 +1,10 @@
 ## rewind_recreate.py Tasks
 
+## Questions
+
+* What are all those weakrefs after creating a class?
+* What happens when you use the special protocols? Write tests
+
 * STORE_FAST
 * RETURN_VALUE
 * NEW_OBJECT
