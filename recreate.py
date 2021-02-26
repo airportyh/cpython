@@ -1,11 +1,8 @@
 # Todo
 
 # make slice assignment work for custom iterable classes
-# we need to log when a function or method is defined, and log it into DB
 # queries
-# get classes to work as objects
 # write terminal debugger in python
-
 # compile SSL into Python
 # get pygame working
 # get flask working
@@ -14,6 +11,8 @@
 # have a flag to turn on debug mode
 # try it on a "real" apps
 
+# get classes to work as objects (done)
+# we need to log when a function or method is defined, and log it into DB (done)
 # optimization: use low level iteration methods whenever possible (done)
 # get zoom debugger to work for Python (done)
 # object tagging (done)
@@ -106,6 +105,7 @@ def define_schema(conn):
         create table Snapshot (
             id integer primary key,
             fun_call_id integer,
+            start_fun_call_id integer,
             heap integer,
             line_no integer,
             constraint Snapshot_fk_fun_call_id foreign key (fun_call_id)
@@ -232,7 +232,7 @@ def parse_line(line):
     while True:
         m = ARGUMENT_REGEX.match(line, start_idx)
         if m is None:
-            raise Exception("Parse error on line '%s' at %d" % (line, start_idx))
+            break
         value = parse_value(m.group(1))
         args.append(value)
         if m.span()[1] == len(line):
@@ -549,6 +549,17 @@ def recreate_past(conn, filename):
             var_dict[varname] = value
         return var_dict
     
+    def save_new_snapshot():
+        sid = new_snapshot_id()
+        cursor.execute("INSERT INTO Snapshot VALUES (?, ?, ?, ?, ?)", (
+            sid, 
+            stack and stack.id, 
+            None,
+            heap_version,
+            curr_line_no
+        ))
+        return sid
+
     def process_new_code(heap_id, filename, name, line_no, *rest):
         num_local_vars, local_varnames, rest = grab_var_args(rest)
         num_cell_vars, cell_varnames, rest = grab_var_args(rest)
@@ -565,10 +576,46 @@ def recreate_past(conn, filename):
             cell_varnames, free_varnames)
         
         fun.save(cursor)
-
         fun_dict[heap_id] = fun
     
     fun_lookup["NEW_CODE"] = process_new_code
+
+    def process_call_start():
+        nonlocal log_line_no
+        # look through the next commands until encountering either CALL_END or PUSH_FRAME
+        while True:
+            try:
+                line = next(file_iterator)
+                log_line_no += 1
+                if line.startswith("--"):
+                    continue
+                command = parse_line(line)
+                if command[0] == "CALL_END":
+                    # this is a call that didn't have a stack frame(FunCall) because
+                    # it is a native function, we represent that by setting start_fun_call_id to 0
+                    prev_snapshot_id = next_snapshot_id - 1
+                    cursor.execute("UPDATE Snapshot set start_fun_call_id = ? where id = ?", (
+                        0,
+                        prev_snapshot_id
+                    ))
+                    save_new_snapshot()
+                    break
+                elif command[0] == "PUSH_FRAME":
+                    buffered_lines.append(line)
+                    break
+                else:
+                    buffered_lines.append(line)
+            except StopIteration:
+                break
+        
+        log_line_no -= len(buffered_lines)
+    
+    fun_lookup["CALL_START"] = process_call_start
+
+    def process_call_end():
+        pass
+    
+    fun_lookup["CALL_END"] = process_call_end
 
     def process_push_frame(code_heap_id, global_vars_id, local_vars_id, *rest):
         nonlocal stack
@@ -588,8 +635,18 @@ def recreate_past(conn, filename):
 
         update_heap_object(local_vars_id, local_var_dict)
 
+        fun_call_id = new_fun_call_id()
+
+        # mark the previously save snapshot with our fun_call_id in its start_fun_call_id field
+        prev_snapshot_id = next_snapshot_id - 1
+        
+        cursor.execute("UPDATE Snapshot set start_fun_call_id = ? where id = ?", (
+            fun_call_id,
+            prev_snapshot_id
+        ))
+
         fun_call = FunCall(
-            new_fun_call_id(),
+            fun_call_id,
             fun,
             local_vars_id,
             global_vars_id,
@@ -610,12 +667,7 @@ def recreate_past(conn, filename):
         curr_line_no = line_no
         if not activate_snapshots:
             return
-        cursor.execute("INSERT INTO Snapshot VALUES (?, ?, ?, ?)", (
-            new_snapshot_id(), 
-            stack and stack.id, 
-            heap_version,
-            line_no
-        ))
+        save_new_snapshot()
     
     fun_lookup["VISIT"] = process_visit
 
@@ -661,12 +713,7 @@ def recreate_past(conn, filename):
         new_local_vars["<ret val>"] = ret_val
         update_heap_object(heap_id, new_local_vars)
 
-        cursor.execute("INSERT INTO Snapshot VALUES (?, ?, ?, ?)", (
-            new_snapshot_id(), 
-            stack and stack.id, 
-            heap_version,
-            curr_line_no
-        ))
+        save_new_snapshot()
 
     fun_lookup["RETURN_VALUE"] = process_return_value
     fun_lookup["YIELD_VALUE"] = process_return_value
@@ -918,14 +965,7 @@ def recreate_past(conn, filename):
         # until stack_depth is 1, in which case, we know the exception was uncaught
         # and we'll record it into the Error table
         def commit_exception():
-            snapshot_id = new_snapshot_id()
-            cursor.execute("INSERT INTO Snapshot VALUES (?, ?, ?, ?)", (
-                snapshot_id, 
-                stack and stack.id, 
-                heap_version,
-                curr_line_no
-            ))
-
+            snapshot_id = save_new_snapshot()
             cursor.execute("INSERT INTO Error VALUES (?, ?, ?, ?)", (
                 new_error_id(),
                 exception_type,
@@ -969,7 +1009,9 @@ def recreate_past(conn, filename):
                     raise Exception("This should not happen")
             except StopIteration:
                 break
-    
+
+        log_line_no -= len(buffered_lines)
+
     fun_lookup["EXCEPTION"] = process_exception
 
     def process_new_module(heap_id):

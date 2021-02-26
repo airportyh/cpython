@@ -9,8 +9,6 @@ int Rewind_IsSimpleType(PyObject *obj);
 
 void Rewind_Cleanup(void);
 
-void Rewind_CallFunction(PyCodeObject *code);
-
 void Rewind_PushFrame(PyFrameObject *frame);
 
 void Rewind_PopFrame(PyFrameObject *frame);
@@ -65,17 +63,15 @@ void Rewind_SetUpdate(PySetObject *set);
 
 void Rewind_YieldValue(PyObject *retval);
 
-void Rewind_StoreName(PyObject *ns, PyObject *name, PyObject *value);
-
 void Rewind_StoreFast(int index, PyObject *value);
-
-void Rewind_StoreGlobal(PyObject *ns, PyObject *name, PyObject *value);
-
-void Rewind_DeleteGlobal(PyObject *ns, PyObject *name);
 
 void Rewind_ReturnValue(PyObject *retval);
 
 void Rewind_StringInPlaceAdd(PyObject *left, PyObject *right, PyObject *result);
+
+void Rewind_CallStart(void);
+
+void Rewind_CallEnd(void);
 
 void Rewind_ObjectAssocDict(PyObject *obj, PyObject *dict);
 

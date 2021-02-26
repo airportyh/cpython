@@ -4049,7 +4049,12 @@ main_loop:
             PyObject **sp, *res;
             sp = stack_pointer;
 
+            Rewind_CallStart();
+
             res = call_function(tstate, &sp, oparg, NULL);
+
+            Rewind_CallEnd();
+
             stack_pointer = sp;
             PUSH(res);
             if (res == NULL) {
@@ -4068,7 +4073,12 @@ main_loop:
             assert(PyTuple_GET_SIZE(names) <= oparg);
             /* We assume without checking that names contains only strings */
             sp = stack_pointer;
+
+            Rewind_CallStart();
+
             res = call_function(tstate, &sp, oparg, names);
+
+            Rewind_CallEnd();
             stack_pointer = sp;
             PUSH(res);
             Py_DECREF(names);
@@ -4115,7 +4125,11 @@ main_loop:
             }
             assert(PyTuple_CheckExact(callargs));
 
+            Rewind_CallStart();
+
             result = do_call_core(tstate, func, callargs, kwargs);
+
+            Rewind_CallEnd();
             Py_DECREF(func);
             Py_DECREF(callargs);
             Py_XDECREF(kwargs);

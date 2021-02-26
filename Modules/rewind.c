@@ -79,13 +79,6 @@ void Rewind_TrackCodeObject(PyCodeObject *code) {
     PySet_Add(knownObjectIds, id);
 }
 
-void Rewind_CallFunction(PyCodeObject *code) {
-    if (!rewindActive) return;
-
-    Rewind_TrackCodeObject(code);
-    fprintf(rewindLog, "CALL_FUNCTION(%lu)\n", (unsigned long)code);
-}
-
 /*
 PUSH_FRAME(
     code_id,
@@ -461,6 +454,18 @@ void Rewind_StringInPlaceAdd(PyObject *left, PyObject *right, PyObject *result) 
         PyObject_Print(result, rewindLog, 0);
         fprintf(rewindLog, ")\n");
     }
+}
+
+void Rewind_CallStart() {
+    if (!rewindTraceOn) return;
+
+    fprintf(rewindLog, "CALL_START()\n");
+}
+
+void Rewind_CallEnd() {
+    if (!rewindTraceOn) return;
+
+    fprintf(rewindLog, "CALL_END()\n");
 }
 
 void Rewind_TrackList(PyObject *obj) {
