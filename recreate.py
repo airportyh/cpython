@@ -352,6 +352,9 @@ def recreate_past(conn, filename):
         
         def serialize(self):
             return '<cell>{"ob_ref": %s}' % serialize(self.ob_ref)
+        
+        def __repr__(self):
+            return "Cell(%s)" % repr(self.__dict__)
 
     class DerivedDict(object):
         def __init__(self, typename, a_dict, attr_dict_id = None):
@@ -1063,7 +1066,7 @@ def recreate_past(conn, filename):
         if line.startswith("--"):
             continue
         try:
-            command = parse_line(line)    
+            command = parse_line(line)
             if command[0] not in fun_lookup:
                 print("Warning: no process function for command %s on line %d" % (command[0], log_line_no))
                 continue

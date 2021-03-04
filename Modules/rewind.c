@@ -613,7 +613,6 @@ void Rewind_TrackObject(PyObject *obj) {
     } else if (Py_IS_TYPE(obj, &PyUnicode_Type)) {
         PySet_Add(knownObjectIds, id);
         Py_DECREF(id);
-
         fprintf(rewindLog, "NEW_STRING(%lu, ", (unsigned long)obj);
         Py_INCREF(obj);
         PyObject_Print(obj, rewindLog, 0);
@@ -637,7 +636,11 @@ void Rewind_TrackObject(PyObject *obj) {
         Rewind_TrackTuple(obj);
     } else if (Py_IS_TYPE(obj, &PyModule_Type)) {
         fprintf(rewindLog, "NEW_MODULE(%lu)\n", (unsigned long)obj);
+        PySet_Add(knownObjectIds, id);
+        Py_DECREF(id);
     } else if (Py_IS_TYPE(obj, &PyCell_Type)) {
+        PySet_Add(knownObjectIds, id);
+        Py_DECREF(id);
         fprintf(rewindLog, "NEW_CELL(%lu)\n", (unsigned long)obj);
     } else if (Py_IS_TYPE(obj, &PyCode_Type)) {
         // Ignore, don't track here
