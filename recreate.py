@@ -1,7 +1,7 @@
 # Todo
 
 # make slice assignment work for custom iterable classes
-# queries
+# data mutation queries
 # write terminal debugger in python
 # compile SSL into Python
 # get pygame working
@@ -624,7 +624,7 @@ def recreate_past(conn, filename):
         nonlocal stack
 
         fun = fun_dict[code_heap_id]
-
+        
         local_vars = rest[0:len(fun.local_varnames)]
         rest = rest[len(fun.local_varnames):]
         cell_vars = rest[0:len(fun.cell_varnames)]
@@ -633,6 +633,16 @@ def recreate_past(conn, filename):
         local_var_dict = gen_var_dict(fun.local_varnames, local_vars)
         cell_var_dict = gen_var_dict(fun.cell_varnames, cell_vars)
         free_var_dict = gen_var_dict(fun.free_varnames, free_vars)
+        
+        # if duplicate name exists between cell_var and local_var, cell_var takes precedence
+        for cellvar in fun.cell_varnames:
+            if cellvar in local_var_dict:
+                del local_var_dict[cellvar]
+        
+        # do same for free var
+        for freevar in fun.free_varnames:
+            if freevar in local_var_dict:
+                del local_var_dict[freevar]
 
         #print("push_frame", name, "cell_var_dict", cell_var_dict, "free_var_dict", free_var_dict)
 
@@ -692,8 +702,8 @@ def recreate_past(conn, filename):
     
     fun_lookup["STORE_FAST"] = process_store_fast
 
-    def process_new_cell(heap_id):
-        cell = Cell()
+    def process_new_cell(heap_id, value):
+        cell = Cell(value)
         update_heap_object(heap_id, cell)
     
     fun_lookup["NEW_CELL"] = process_new_cell

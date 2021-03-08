@@ -641,7 +641,9 @@ void Rewind_TrackObject(PyObject *obj) {
     } else if (Py_IS_TYPE(obj, &PyCell_Type)) {
         PySet_Add(knownObjectIds, id);
         Py_DECREF(id);
-        fprintf(rewindLog, "NEW_CELL(%lu)\n", (unsigned long)obj);
+        fprintf(rewindLog, "NEW_CELL(%lu, ", (unsigned long)obj);
+        Rewind_SerializeObject(rewindLog, ((PyCellObject *)obj)->ob_ref);
+        fprintf(rewindLog, ")\n");
     } else if (Py_IS_TYPE(obj, &PyCode_Type)) {
         // Ignore, don't track here
     } else {
