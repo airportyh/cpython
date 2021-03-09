@@ -8,7 +8,7 @@ KEY_ERROR_REGEX = re.compile(r"KeyError: [0-9]+$")
 
 def execute():
     print("Command 1")
-    cmd1 = subprocess.run(["./python.exe", "tests/object_test.py"], 
+    cmd1 = subprocess.run(["./python.exe", "tests/test2.py"], 
         stdout=subprocess.PIPE, 
         stderr=subprocess.PIPE)
     cmd1stdout = cmd1.stdout.decode("utf-8")
@@ -22,7 +22,7 @@ def execute():
     
     print("Command 2")
     cmd2 = subprocess.run(
-        ["python3", "recreate.py", "tests/object_test.rewind"], 
+        ["python3", "recreate.py", "tests/test2.rewind"], 
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
@@ -32,44 +32,14 @@ def execute():
     cmd2stderr = cmd2.stderr.decode("utf-8")
     if cmd2stderr:
         print(cmd2stderr)
-
-    print("Command 3")
-    cmd1 = subprocess.run(["./python.exe", "tests/object_test.py"], 
-        stdout=subprocess.PIPE, 
-        stderr=subprocess.PIPE)
-    cmd1stdout = cmd1.stdout.decode("utf-8")
-    if cmd1stdout:
-        print(cmd1stdout)
-    cmd1stderr = cmd1.stderr.decode("utf-8")
-    if cmd1stderr:
-        print(cmd1stderr)
-    if cmd1.returncode != 0:
-        return False
-    
-    print("Command 4")
-    cmd2 = subprocess.run(
-        ["python3", "recreate.py", "tests/object_test.rewind"], 
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
-    )
-    cmd2stdout = cmd2.stdout.decode("utf-8")
-    if cmd2stdout:
-        print(cmd2stdout)
-    cmd2stderr = cmd2.stderr.decode("utf-8")
-    if cmd2stderr:
-        print(cmd2stderr)
-
-    if cmd2.returncode == 0:
-        return False
     
     stderr = cmd2.stderr.decode("utf-8")
     errlines = stderr.split("\n")
-    m = KEY_ERROR_REGEX.match(errlines[-2])
-    return m is not None
+    
+    return len(errlines) > 3 and errlines[-2] == "AssertionError" and errlines[-3] == "    assert len(a_list) == size"
     
 def main():
-    # print(execute())
-    simplify_test_case(execute, "tests/fakecontextlib.py")
+    simplify_test_case(execute, "tests/test2.py")
     
 def simplify_test_case(execute, input_file):
     copyfile(input_file, input_file + ".original")

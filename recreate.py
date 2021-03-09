@@ -776,17 +776,33 @@ def recreate_past(conn, filename):
     
     fun_lookup["NEW_TUPLE"] = process_new_tuple
 
-    def process_list_store_subscript(heap_id, index, value):
+    def process_list_store_index(heap_id, index, value):
         obj = heap_id_to_object_dict[heap_id]
         new_list = obj.copy()
         new_list[index] = value
         update_heap_object(heap_id, new_list)
-    
-    fun_lookup["LIST_STORE_SUBSCRIPT"] = process_list_store_subscript
+
+    fun_lookup["LIST_STORE_INDEX"] = process_list_store_index
+
+    def process_list_resize_and_shift(heap_id, old_size, new_size, start_index, range_size):
+        a_list = heap_id_to_object_dict[heap_id]
+        assert len(a_list) == old_size
+        new_list = a_list.copy()
+        if range_size < 0:
+            the_slice = slice(start_index + range_size, start_index)
+            del new_list[the_slice]
+        else:
+            s1 = slice(start_index, start_index + range_size)
+            s2 = slice(len(new_list), len(new_list) + range_size)
+            new_list[s2] = new_list[s1]
+        assert len(new_list) == new_size
+        update_heap_object(heap_id, new_list)
+
+    fun_lookup["LIST_RESIZE_AND_SHIFT"] = process_list_resize_and_shift
 
     def process_list_store_subscript_slice(heap_id, start, stop, step, value):
         a_list = heap_id_to_object_dict[heap_id]
-        new_list = a_list = a_list.copy()
+        new_list = a_list.copy()
         a_slice = slice(start, stop, step)
         if isinstance(value, HeapRef):
             value = heap_id_to_object_dict[value.id]

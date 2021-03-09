@@ -266,6 +266,9 @@ static int
 ins1(PyListObject *self, Py_ssize_t where, PyObject *v)
 {
     Py_ssize_t i, n = Py_SIZE(self);
+    
+    Rewind_ListInsert(self, where, v);
+    
     PyObject **items;
     if (v == NULL) {
         PyErr_BadInternalCall();
@@ -305,7 +308,8 @@ static int
 app1(PyListObject *self, PyObject *v)
 {
     Py_ssize_t n = PyList_GET_SIZE(self);
-
+    
+    Rewind_ListAppend(self, v);
     assert (v != NULL);
     assert((size_t)n + 1 < PY_SSIZE_T_MAX);
     if (list_resize(self, n+1) < 0)
@@ -583,6 +587,7 @@ _list_clear(PyListObject *a)
 {
     Py_ssize_t i;
     PyObject **item = a->ob_item;
+    Rewind_ListClear(a);
     if (item != NULL) {
         /* Because XDECREF can recursively invoke operations on
            this list, we make it empty first. */
@@ -627,6 +632,7 @@ list_ass_slice(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh, PyObject *v)
     Py_ssize_t k;
     size_t s;
     int result = -1;            /* guilty until proved innocent */
+
 #define b ((PyListObject *)v)
     if (v == NULL)
         n = 0;
@@ -678,6 +684,8 @@ list_ass_slice(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh, PyObject *v)
         memcpy(recycle, &item[ilow], s);
     }
 
+    Py_ssize_t size_before = Py_SIZE(a);
+
     if (d < 0) { /* Delete -d items */
         Py_ssize_t tail;
         tail = (Py_SIZE(a) - ihigh) * sizeof(PyObject *);
@@ -687,6 +695,9 @@ list_ass_slice(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh, PyObject *v)
             memcpy(&item[ilow], recycle, s);
             goto Error;
         }
+
+        Rewind_ListResizeAndShift(a, size_before, Py_SIZE(a), ihigh, d);
+        
         item = a->ob_item;
     }
     else if (d > 0) { /* Insert d items */
@@ -694,17 +705,22 @@ list_ass_slice(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh, PyObject *v)
         if (list_resize(a, k+d) < 0)
             goto Error;
         item = a->ob_item;
+        Rewind_ListResizeAndShift(a, size_before, Py_SIZE(a), ihigh, d);
         memmove(&item[ihigh+d], &item[ihigh],
             (k - ihigh)*sizeof(PyObject *));
     }
+
+    
     for (k = 0; k < n; k++, ilow++) {
         PyObject *w = vitem[k];
         Py_XINCREF(w);
         item[ilow] = w;
+        Rewind_ListStoreIndex(a, ilow, w);
     }
     for (k = norig - 1; k >= 0; --k)
         Py_XDECREF(recycle[k]);
     result = 0;
+
  Error:
     if (recycle != recycle_on_stack)
         PyMem_Free(recycle);
@@ -773,6 +789,7 @@ list_ass_item(PyListObject *a, Py_ssize_t i, PyObject *v)
     if (v == NULL)
         return list_ass_slice(a, i, i+1, v);
     Py_INCREF(v);
+    Rewind_ListStoreIndex(a, i, v);
     Py_SETREF(a->ob_item[i], v);
     return 0;
 }
@@ -791,7 +808,6 @@ static PyObject *
 list_insert_impl(PyListObject *self, Py_ssize_t index, PyObject *object)
 /*[clinic end generated code: output=7f35e32f60c8cb78 input=858514cf894c7eab]*/
 {
-    Rewind_ListInsert(self, index, object);
     if (ins1(self, index, object) == 0)
         Py_RETURN_NONE;
     return NULL;
@@ -839,7 +855,6 @@ static PyObject *
 list_append(PyListObject *self, PyObject *object)
 /*[clinic end generated code: output=7c096003a29c0eae input=43a3fe48a7066e91]*/
 {
-    Rewind_ListAppend(self, object);
     if (app1(self, object) == 0)
         Py_RETURN_NONE;
     return NULL;
@@ -902,8 +917,8 @@ list_extend(PyListObject *self, PyObject *iterable)
         for (i = 0; i < n; i++) {
             PyObject *o = src[i];
             Py_INCREF(o);
-            dest[i] = o;
             Rewind_ListAppend(self, o);
+            dest[i] = o;
         }
         Py_DECREF(iterable);
         Py_RETURN_NONE;
@@ -950,6 +965,7 @@ list_extend(PyListObject *self, PyObject *iterable)
         }
         if (Py_SIZE(self) < self->allocated) {
             /* steals ref */
+            Rewind_ListAppend(self, item);
             PyList_SET_ITEM(self, Py_SIZE(self), item);
             Py_SET_SIZE(self, Py_SIZE(self) + 1);
         }
@@ -960,7 +976,7 @@ list_extend(PyListObject *self, PyObject *iterable)
                 goto error;
         }
 
-        Rewind_ListAppend(self, item);
+        
     }
 
     /* Cut back result list if initial guess was too large. */
@@ -968,6 +984,8 @@ list_extend(PyListObject *self, PyObject *iterable)
         if (list_resize(self, Py_SIZE(self)) < 0)
             goto error;
     }
+
+    Rewind_ListExtendEnd(self);
 
     Py_DECREF(it);
     Py_RETURN_NONE;
@@ -2882,20 +2900,15 @@ list_subscript(PyListObject* self, PyObject* item)
 static int
 list_ass_subscript(PyListObject* self, PyObject* item, PyObject* value)
 {
-
-    if (value == NULL) {
-        Rewind_ListDeleteSubscript(self, item);
-    } else {
-        Rewind_ListStoreSubscript(self, item, value);
-    }
-
     if (_PyIndex_Check(item)) {
         Py_ssize_t i = PyNumber_AsSsize_t(item, PyExc_IndexError);
         if (i == -1 && PyErr_Occurred())
             return -1;
         if (i < 0)
             i += PyList_GET_SIZE(self);
-        return list_ass_item(self, i, value);
+        
+        int ret = list_ass_item(self, i, value);
+        return ret;
     }
     else if (PySlice_Check(item)) {
         Py_ssize_t start, stop, step, slicelength;
@@ -2921,6 +2934,8 @@ list_ass_subscript(PyListObject* self, PyObject* item, PyObject* value)
             size_t cur;
             Py_ssize_t i;
             int res;
+
+            Rewind_ListDeleteSubscript(self, item);
 
             if (slicelength <= 0)
                 return 0;
@@ -2984,6 +2999,8 @@ list_ass_subscript(PyListObject* self, PyObject* item, PyObject* value)
             Py_ssize_t i;
             size_t cur;
 
+            Rewind_Log("assigning slice");
+
             /* protect against a[::-1] = a */
             if (self == (PyListObject*)value) {
                 seq = list_slice((PyListObject*)value, 0,
@@ -3029,6 +3046,7 @@ list_ass_subscript(PyListObject* self, PyObject* item, PyObject* value)
                 ins = seqitems[i];
                 Py_INCREF(ins);
                 selfitems[cur] = ins;
+                Rewind_ListStoreIndex(self, cur, ins);
             }
 
             for (i = 0; i < slicelength; i++) {

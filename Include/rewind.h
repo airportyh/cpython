@@ -23,6 +23,8 @@ void Rewind_ListInsert(PyListObject *list, Py_ssize_t index, PyObject *value);
 
 void Rewind_ListExtendBegin(PyListObject *list);
 
+void Rewind_ListExtendEnd(PyListObject *list);
+
 void Rewind_ListRemove(PyListObject *list, PyObject *item);
 
 void Rewind_ListPop(PyListObject *list, Py_ssize_t index);
@@ -32,6 +34,16 @@ void Rewind_ListClear(PyListObject *list);
 void Rewind_ListReverse(PyListObject *list);
 
 void Rewind_ListSort(PyListObject *list);
+
+void Rewind_ListResizeAndShift(PyListObject *list, Py_ssize_t oldSize, Py_ssize_t size, Py_ssize_t index, Py_ssize_t numItems);
+
+void Rewind_ListStoreIndex(PyListObject *list, size_t index, PyObject* value);
+
+void Rewind_ListAssSliceStart(PyListObject *list);
+
+void Rewind_ListAssSliceEnd(PyListObject *list);
+
+void Rewind_ListDeleteIndex(PyListObject *list, size_t index);
 
 void Rewind_ListStoreSubscript(PyListObject *list, PyObject* item, PyObject* value);
 

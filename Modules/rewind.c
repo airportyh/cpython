@@ -189,6 +189,13 @@ void Rewind_ListExtendBegin(PyListObject *list) {
     // fprintf(rewindLog, "LIST_EXTEND_BEGIN(%lu)\n", (unsigned long)list);
 }
 
+void Rewind_ListExtendEnd(PyListObject *list) {
+    if (!rewindTraceOn) return;
+
+    Rewind_TrackObject((PyObject *)list);
+    // fprintf(rewindLog, "LIST_EXTEND_END(%lu, %lu)\n", (unsigned long)list, Py_SIZE(list));
+}
+
 void Rewind_ListRemove(PyListObject *list, PyObject *item) {
     if (!rewindTraceOn) return;
 
@@ -231,6 +238,41 @@ void Rewind_ListSort(PyListObject *list) {
         Rewind_SerializeObject(rewindLog, item);
     }
     fprintf(rewindLog, ")\n");
+}
+
+void Rewind_ListResizeAndShift(PyListObject *list, Py_ssize_t oldSize, Py_ssize_t size, Py_ssize_t index, Py_ssize_t numItems) {
+    if (!rewindTraceOn) return;
+
+    Rewind_TrackObject(list);
+    fprintf(rewindLog, "LIST_RESIZE_AND_SHIFT(%lu, %ld, %ld, %ld, %ld)\n", (unsigned long)list, oldSize, size, index, numItems);
+}
+
+void Rewind_ListStoreIndex(PyListObject *list, size_t index, PyObject* value) {
+    if (!rewindTraceOn) return;
+
+    Rewind_TrackObject(list);
+    Rewind_TrackObject(value);
+    fprintf(rewindLog, "LIST_STORE_INDEX(%lu, %ld, ", (unsigned long)list, index);
+    Rewind_SerializeObject(rewindLog, value);
+    fprintf(rewindLog, ")\n");
+}
+
+void Rewind_ListAssSliceStart(PyListObject *list) {
+    if (!rewindTraceOn) return;
+
+    fprintf(rewindLog, "LIST_ASS_SLICE(%lu, %lu)\n", (unsigned long)list, Py_SIZE(list));
+}
+
+void Rewind_ListAssSliceEnd(PyListObject *list) {
+    if (!rewindTraceOn) return;
+
+    fprintf(rewindLog, "LIST_ASS_SLICE_END(%lu, %lu)\n", (unsigned long)list, Py_SIZE(list));
+}
+
+void Rewind_ListDeleteIndex(PyListObject *list, size_t index) {
+    if (!rewindTraceOn) return;
+
+    fprintf(rewindLog, "LIST_DELETE_INDEX(%lu, %ld)", (unsigned long)list, index);
 }
 
 void Rewind_ListStoreSubscript(PyListObject *list, PyObject* key, PyObject* value) {
@@ -616,6 +658,7 @@ void Rewind_TrackObject(PyObject *obj) {
         fprintf(rewindLog, "NEW_STRING(%lu, ", (unsigned long)obj);
         Py_INCREF(obj);
         PyObject_Print(obj, rewindLog, 0);
+
         fprintf(rewindLog, ")\n");
         Py_DECREF(obj);
     } else if (Py_IS_TYPE(obj, &PyDict_Type)) {
@@ -851,13 +894,13 @@ void Rewind_Op(char *label, PyFrameObject *frame, int oparg, int numArgs, ...) {
         }
         lastLine = lineNo;
     }
-    fprintf(rewindLog, "-- %s(oparg=%d", label, oparg);
+    // fprintf(rewindLog, "-- %s(oparg=%d", label, oparg);
 
-    for (int i = 0; i < numArgs; i++) {
-        fprintf(rewindLog, ", ");
-        PyObject *arg = va_arg(varargs, PyObject *);
-        Rewind_PrintObject(rewindLog, arg);
-    }
-    va_end(varargs);
-    fprintf(rewindLog, ") on #%d\n", lineNo);
+    // for (int i = 0; i < numArgs; i++) {
+    //     fprintf(rewindLog, ", ");
+    //     PyObject *arg = va_arg(varargs, PyObject *);
+    //     Rewind_PrintObject(rewindLog, arg);
+    // }
+    // va_end(varargs);
+    // fprintf(rewindLog, ") on #%d\n", lineNo);
 }
