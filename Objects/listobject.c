@@ -634,6 +634,9 @@ list_ass_slice(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh, PyObject *v)
     int result = -1;            /* guilty until proved innocent */
 
 #define b ((PyListObject *)v)
+
+    Py_ssize_t size_before = Py_SIZE(a);
+
     if (v == NULL)
         n = 0;
     else {
@@ -683,8 +686,6 @@ list_ass_slice(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh, PyObject *v)
         }
         memcpy(recycle, &item[ilow], s);
     }
-
-    Py_ssize_t size_before = Py_SIZE(a);
 
     if (d < 0) { /* Delete -d items */
         Py_ssize_t tail;
