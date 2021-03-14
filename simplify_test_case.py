@@ -36,9 +36,10 @@ def execute():
     stderr = cmd2.stderr.decode("utf-8")
     errlines = stderr.split("\n")
     
-    return len(errlines) > 3 and errlines[-2] == "AssertionError" and errlines[-3] == "    assert len(a_list) == size"
+    return len(errlines) > 3 and errlines[-2] == "AssertionError" and errlines[-3] == "    assert len(new_list) == new_size"
     
 def main():
+    # print(execute())
     simplify_test_case(execute, "tests/test2.py")
     
 def simplify_test_case(execute, input_file):

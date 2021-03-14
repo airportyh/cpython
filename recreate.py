@@ -795,6 +795,8 @@ def recreate_past(conn, filename):
             s1 = slice(start_index, start_index + range_size)
             s2 = slice(len(new_list), len(new_list) + range_size)
             new_list[s2] = new_list[s1]
+        if len(new_list) < new_size:
+            new_list = new_list + [None] * (new_size - len(new_list))
         assert len(new_list) == new_size
         update_heap_object(heap_id, new_list)
 
