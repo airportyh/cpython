@@ -250,7 +250,7 @@ void Rewind_ListResizeAndShift(PyListObject *list, Py_ssize_t oldSize, Py_ssize_
 void Rewind_ListStoreIndex(PyListObject *list, size_t index, PyObject* value) {
     if (!rewindTraceOn) return;
 
-    Rewind_TrackObject(list);
+    Rewind_TrackObject((PyObject *)list);
     Rewind_TrackObject(value);
     fprintf(rewindLog, "LIST_STORE_INDEX(%lu, %ld, ", (unsigned long)list, index);
     Rewind_SerializeObject(rewindLog, value);
@@ -630,6 +630,8 @@ void Rewind_TrackClassObject(PyObject *obj) {
 }
 
 void Rewind_TrackObject(PyObject *obj) {
+    if (!rewindTraceOn) return;
+
     if (obj == NULL) {
         return;
     }

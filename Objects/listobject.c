@@ -636,6 +636,7 @@ list_ass_slice(PyListObject *a, Py_ssize_t ilow, Py_ssize_t ihigh, PyObject *v)
 #define b ((PyListObject *)v)
 
     Py_ssize_t size_before = Py_SIZE(a);
+    Rewind_TrackObject((PyObject *)a);
 
     if (v == NULL)
         n = 0;
@@ -2631,7 +2632,6 @@ list_remove(PyListObject *self, PyObject *value)
 /*[clinic end generated code: output=f087e1951a5e30d1 input=2dc2ba5bb2fb1f82]*/
 {
     Py_ssize_t i;
-    Rewind_ListRemove(self, value);
 
     for (i = 0; i < Py_SIZE(self); i++) {
         PyObject *obj = self->ob_item[i];

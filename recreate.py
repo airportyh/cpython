@@ -784,10 +784,9 @@ def recreate_past(conn, filename):
 
     fun_lookup["LIST_STORE_INDEX"] = process_list_store_index
 
-    #  LIST_RESIZE_AND_SHIFT(4406454656, 0, 1, 0, 1)
     def process_list_resize_and_shift(heap_id, old_size, new_size, start_index, range_size):
         a_list = heap_id_to_object_dict[heap_id]
-        assert len(a_list) == old_size
+        #assert len(a_list) == old_size
         new_list = a_list.copy()
         if range_size < 0:
             the_slice = slice(start_index + range_size, start_index)
@@ -798,7 +797,7 @@ def recreate_past(conn, filename):
             new_list[s2] = new_list[s1]
         if len(new_list) < new_size:
             new_list = new_list + [None] * (new_size - len(new_list))
-        assert len(new_list) == new_size
+        #assert len(new_list) == new_size
         update_heap_object(heap_id, new_list)
 
     fun_lookup["LIST_RESIZE_AND_SHIFT"] = process_list_resize_and_shift

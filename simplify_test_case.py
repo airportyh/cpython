@@ -8,8 +8,8 @@ KEY_ERROR_REGEX = re.compile(r"KeyError: [0-9]+$")
 
 def execute():
     print("Command 1")
-    cmd1 = subprocess.run(["./python.exe", "tests/test2.py"], 
-        stdout=subprocess.PIPE, 
+    cmd1 = subprocess.run(["./python", "tests/test2.py"],
+        stdout=subprocess.PIPE,
         stderr=subprocess.PIPE)
     cmd1stdout = cmd1.stdout.decode("utf-8")
     if cmd1stdout:
@@ -19,10 +19,10 @@ def execute():
         print(cmd1stderr)
     if cmd1.returncode != 0:
         return False
-    
+
     print("Command 2")
     cmd2 = subprocess.run(
-        ["python3", "recreate.py", "tests/test2.rewind"], 
+        ["python3", "recreate.py", "tests/test2.rewind"],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE
     )
@@ -32,16 +32,16 @@ def execute():
     cmd2stderr = cmd2.stderr.decode("utf-8")
     if cmd2stderr:
         print(cmd2stderr)
-    
+
     stderr = cmd2.stderr.decode("utf-8")
     errlines = stderr.split("\n")
-    
-    return len(errlines) > 3 and errlines[-2] == "AssertionError" and errlines[-3] == "    assert len(a_list) == old_size"
-    
+
+    return len(errlines) > 1 and errlines[-2] == "ValueError: list.remove(x): x not in list"
+
 def main():
-    # print(execute())
+    #print(execute())
     simplify_test_case(execute, "tests/test2.py")
-    
+
 def simplify_test_case(execute, input_file):
     copyfile(input_file, input_file + ".original")
     print("Backed up " + input_file + " to " + input_file + ".original")
@@ -103,3 +103,4 @@ def simplify_test_case(execute, input_file):
 
 if __name__ == "__main__":
     main()
+
